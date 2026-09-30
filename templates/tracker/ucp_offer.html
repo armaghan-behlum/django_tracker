@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}
+    File a Formal Complaint
+{% endblock %}
+
+{% block content %}
+
+<div class="form-section">
+
+    <h1 class="mb-3">
+        Your report is submitted. Want to file a formal complaint?
+    </h1>
+
+    <p class="lead">
+        California's Uniform Complaint Procedures (UCP) give you a
+        formal path: your school district must investigate and answer
+        you in writing within 60 days.
+    </p>
+
+    <div class="privacy-box">
+        <strong>You will not have to start over.</strong>
+        We carry over the information you just gave us onto your
+        district's own complaint form. If the district's form asks for
+        anything we don't already have, we ask only those questions
+        &mdash; for most districts that is just a handful.
+    </div>
+
+    {% if portal_down %}
+        <div class="alert alert-warning">
+            The complaint-form service is temporarily unavailable.
+            Your report is safely submitted &mdash; you can come back
+            to this page later, or continue without filing now.
+        </div>
+    {% endif %}
+
+    <h2>First, confirm your school district</h2>
+
+    <form method="get" class="row g-2 mb-3">
+        <div class="col-auto flex-grow-1">
+            <input
+                type="text"
+                name="district_query"
+                value="{{ district_query }}"
+                class="form-control"
+                placeholder="Start typing your district's name&hellip;"
+            >
+        </div>
+
+        <div class="col-auto">
+            <button type="submit" class="btn btn-outline-primary">
+                Search
+            </button>
+        </div>
+    </form>
+
+    {% if matches %}
+        <div class="list-group mb-3">
+            {% for match in matches %}
+                <a
+                    class="list-group-item list-group-item-action"
+                    href="?cds={{ match.cds }}"
+                >
+                    <strong>{{ match.name }}</strong>
+                    &mdash; {{ match.county }} County
+
+                    {% if match.tier == "official" %}
+                        <span class="badge text-bg-success float-end">
+                            district's own form
+                        </span>
+                    {% else %}
+                        <span class="badge text-bg-secondary float-end">
+                            formal complaint letter
+                        </span>
+                    {% endif %}
+                </a>
+            {% endfor %}
+        </div>
+
+        <p class="required-note">
+            Districts marked "district's own form" get their official
+            UCP form filled in. For the others we prepare a formal
+            complaint letter, which districts must accept under
+            5&nbsp;CCR &sect;&nbsp;4600.
+        </p>
+    {% elif district_query and not portal_down %}
+        <p class="text-muted">
+            No district matched. Try a shorter version of the name
+            (for example "Hayward" instead of "Hayward USD").
+        </p>
+    {% endif %}
+
+    <hr class="my-4">
+
+    <a
+        href="{% url 'incident_report_success' uuid=report.uuid %}"
+        class="btn btn-link ps-0"
+    >
+        No thanks &mdash; finish without filing a formal complaint
+    </a>
+
+</div>
+
+{% endblock %}

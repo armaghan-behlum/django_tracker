@@ -566,3 +566,30 @@ class ReportAttachment(models.Model):
 
     def __str__(self):
         return f"Attachment — {self.report.uuid} — {self.file.name}"
+
+class UCPFiling(models.Model):
+    """
+    Record of a UCP form generated for a report via the hand-off page.
+
+    The PDF itself is returned to the reporter for signature and is
+    not stored here; this row tracks that the hand-off happened and
+    for which district.
+    """
+
+    report = models.ForeignKey(IncidentReport,
+        on_delete=models.CASCADE, related_name="ucp_filings")
+    district_cds = models.CharField(max_length=14, db_index=True,
+        help_text="CDS code of the district whose form was generated.")
+    district_name = models.CharField(max_length=255)
+    tier = models.CharField(max_length=20, blank=True, help_text=(
+        "How the portal produced the document: 'official' when the "
+        "district's own form was filled, otherwise a generated "
+        "complaint letter."
+    ))
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.report.uuid} → {self.district_name}"

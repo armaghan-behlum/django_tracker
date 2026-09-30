@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Finish Your {{ spec.name }} Complaint
+{% endblock %}
+
+{% block content %}
+
+<div class="form-section">
+
+    <a
+        class="required-note d-inline-block mb-2"
+        href="{% url 'ucp_offer' uuid=report.uuid %}"
+    >&larr; different district</a>
+
+    <h1 class="mb-3">
+        Finish your complaint for {{ spec.name }}
+    </h1>
+
+    {% if spec.tier == "official" %}
+        <p class="lead">
+            We have {{ spec.name }}'s own UCP complaint form. Your
+            answers from the report you just submitted are already on
+            it.
+        </p>
+    {% else %}
+        <p class="lead">
+            {{ spec.name }} does not publish a fillable UCP form, so
+            we prepare a formal complaint letter instead. Under
+            California law (5&nbsp;CCR &sect;&nbsp;4600) the district
+            must accept a signed written complaint.
+        </p>
+    {% endif %}
+
+    <div class="privacy-box">
+        <strong>Almost everything is carried over from your
+        report.</strong> The questions below are only what's still
+        needed to finish the district's form &mdash; nothing you
+        already told us is asked again.
+    </div>
+
+    {% if spec.language_note %}
+        <div class="alert alert-info">{{ spec.language_note }}</div>
+    {% endif %}
+
+</div>
+
+<form method="post" action="?cds={{ cds }}">
+    {% csrf_token %}
+    <input type="hidden" name="cds" value="{{ cds }}">
+
+    {% if followups %}
+    <div class="form-section">
+
+        <h2>A few remaining questions</h2>
+
+        <p class="required-note">
+            These come straight from the district's form.
+        </p>
+
+        {% for field in followups %}
+            <div class="mb-3">
+                <label class="form-label" for="uf-{{ forloop.counter }}">
+                    {{ field.label }}
+                    {% if not field.required %}
+                        <span class="text-muted">(optional)</span>
+                    {% endif %}
+                </label>
+
+                {% if field.help %}
+                    <div class="helptext mb-1">{{ field.help }}</div>
+                {% endif %}
+
+                {% if field.type == "textarea" %}
+                    <textarea
+                        id="uf-{{ forloop.counter }}"
+                        name="{{ field.key }}"
+                        class="form-control"
+                        rows="3"
+                    ></textarea>
+                {% else %}
+                    <input
+                        type="text"
+                        id="uf-{{ forloop.counter }}"
+                        name="{{ field.key }}"
+                        class="form-control"
+                    >
+                {% endif %}
+            </div>
+        {% endfor %}
+
+    </div>
+    {% endif %}
+
+    {% if checkbox_fields %}
+    <div class="form-section">
+
+        <h2>Check the boxes that apply</h2>
+
+        <p class="required-note">
+            We pre-checked the ones that match your report. Review
+            them and add or remove any.
+        </p>
+
+        {% for field in checkbox_fields %}
+            <div class="form-check">
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="{{ field.key }}"
+                    id="cb-{{ forloop.counter }}"
+                    value="1"
+                    {% if field.checked %}checked{% endif %}
+                >
+                <label
+                    class="form-check-label"
+                    for="cb-{{ forloop.counter }}"
+                >
+                    {{ field.label }}
+                </label>
+            </div>
+        {% endfor %}
+
+    </div>
+    {% endif %}
+
+    {% if prefilled %}
+    <div class="form-section">
+
+        <h2>Carried over from your report</h2>
+
+        <p class="required-note">
+            Already on the form &mdash; shown here so you can review
+            it.
+        </p>
+
+        <dl class="row mb-0">
+            {% for label, value in prefilled %}
+                <dt class="col-sm-4">{{ label }}</dt>
+                <dd class="col-sm-8">{{ value|linebreaksbr }}</dd>
+            {% endfor %}
+        </dl>
+
+    </div>
+    {% endif %}
+
+    <div class="form-section">
+
+        <button type="submit" class="btn btn-primary btn-lg">
+            Download my completed complaint (PDF)
+        </button>
+
+        <p class="required-note mt-3 mb-0">
+            Print the PDF, sign and date it, and deliver or mail it to
+            the district office, addressed to the UCP Compliance
+            Officer. The district must send you a written decision
+            within 60 days. Discrimination, harassment, intimidation,
+            or bullying complaints must be filed within 6 months of
+            the conduct or of first learning of it.
+        </p>
+
+    </div>
+
+</form>
+
+{% endblock %}
