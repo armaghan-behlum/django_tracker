@@ -185,3 +185,13 @@ class HerokuDiscoverRunner(DiscoverRunner):
 # Use HerokuDiscoverRunner on Heroku CI
 if "CI" in os.environ:
     TEST_RUNNER = "gettingstarted.settings.HerokuDiscoverRunner"
+# ---------------------------------------------------------------------
+# UCP PORTAL
+# ---------------------------------------------------------------------
+# Service that holds per-district Uniform Complaint Procedures form
+# specs and fills the district's official PDF. Used by the post-submit
+# hand-off page (tracker.ucp).
+UCP_PORTAL_URL = os.environ.get(
+    "UCP_PORTAL_URL",
+    "https://ucp-complaint-helper-production.up.railway.app",
+)

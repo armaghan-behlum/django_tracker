@@ -190,6 +190,10 @@ class IncidentReport(models.Model):
         return f"{self.first_name} {self.last_name}".strip()
 
     def clean(self):
+        # Incident-date validation lives on IncidentDetailsForm: this
+        # model is edited through several partial ModelForms (contact,
+        # incident, final), and a partial form crashes when model-wide
+        # clean() raises errors for fields the form does not carry.
         super().clean()
 
         errors = {}
@@ -198,23 +202,6 @@ class IncidentReport(models.Model):
             errors["phone"] = (
                 "Phone number is required for non-California reports."
             )
-
-        if self.date_precision == self.DatePrecision.EXACT:
-            if not self.incident_date:
-                errors["incident_date"] = (
-                    "Please provide the incident date."
-                )
-
-        elif self.date_precision == self.DatePrecision.MONTH:
-            if not self.incident_month:
-                errors["incident_month"] = (
-                    "Please provide the incident month."
-                )
-
-            if not self.incident_year:
-                errors["incident_year"] = (
-                    "Please provide the incident year."
-                )
 
         if errors:
             raise ValidationError(errors)
@@ -566,3 +553,30 @@ class ReportAttachment(models.Model):
 
     def __str__(self):
         return f"Attachment — {self.report.uuid} — {self.file.name}"
+
+class UCPFiling(models.Model):
+    """
+    Record of a UCP form generated for a report via the hand-off page.
+
+    The PDF itself is returned to the reporter for signature and is
+    not stored here; this row tracks that the hand-off happened and
+    for which district.
+    """
+
+    report = models.ForeignKey(IncidentReport,
+        on_delete=models.CASCADE, related_name="ucp_filings")
+    district_cds = models.CharField(max_length=14, db_index=True,
+        help_text="CDS code of the district whose form was generated.")
+    district_name = models.CharField(max_length=255)
+    tier = models.CharField(max_length=20, blank=True, help_text=(
+        "How the portal produced the document: 'official' when the "
+        "district's own form was filled, otherwise a generated "
+        "complaint letter."
+    ))
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.report.uuid} → {self.district_name}"

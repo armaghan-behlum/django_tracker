@@ -424,7 +424,8 @@ def incident_report_create(request):
                 )
 
             return redirect(
-                "incident_report_success",
+                "ucp_offer" if ucp_eligible(report)
+                else "incident_report_success",
                 uuid=report.uuid,
             )
 
@@ -520,5 +521,207 @@ def incident_report_success(
         "tracker/incident_report_success.html",
         {
             "report": report,
+        },
+    )
+
+# ---------------------------------------------------------------------
+# UCP HAND-OFF
+# ---------------------------------------------------------------------
+
+import logging
+
+from django.http import HttpResponse
+
+from . import ucp
+from .models import UCPFiling
+
+logger = logging.getLogger(__name__)
+
+
+def _submitted_report(uuid):
+    return get_object_or_404(
+        IncidentReport,
+        uuid=uuid,
+        status=IncidentReport.Status.SUBMITTED,
+    )
+
+
+def ucp_eligible(report):
+    """
+    UCP complaints only exist for California K-12 school incidents;
+    other reports go straight to the success page.
+    """
+
+    california = getattr(report, "california_details", None)
+
+    return bool(
+        report.state == "CA"
+        and california
+        and california.is_k12_incident
+    )
+
+
+def ucp_offer(request, uuid):
+    """
+    Post-submit page: offer to prepare the reporter's district UCP
+    form. Three stages on one URL:
+
+      GET  (no cds)   confirm the district (matched from the report)
+      GET  ?cds=...   review carried-over answers + follow-up questions
+      POST ?cds=...   generate the filled PDF
+    """
+
+    report = _submitted_report(uuid)
+
+    if not ucp_eligible(report):
+        return redirect(
+            "incident_report_success",
+            uuid=report.uuid,
+        )
+
+    cds = (
+        request.POST.get("cds")
+        or request.GET.get("cds")
+    )
+
+    # -----------------------------------------------------------------
+    # STAGE 3: GENERATE
+    # -----------------------------------------------------------------
+
+    if request.method == "POST" and cds:
+
+        try:
+            spec = ucp.get_spec(cds)
+            plan = ucp.build_plan(report, spec)
+
+        except ucp.PortalError:
+            logger.exception("UCP portal unavailable")
+            return render(
+                request,
+                "tracker/ucp_offer.html",
+                {
+                    "report": report,
+                    "portal_down": True,
+                },
+            )
+
+        answers = plan["answers"]
+
+        # Follow-up answers and checkbox review from the page win
+        # over anything we derived.
+        for field in plan["followups"]:
+            value = request.POST.get(field["key"], "").strip()
+
+            if value:
+                answers[field["key"]] = value
+
+        for field in plan["checkbox_fields"]:
+            if request.POST.get(field["key"]):
+                answers[field["key"]] = "1"
+            else:
+                answers.pop(field["key"], None)
+
+        try:
+            pdf = ucp.generate_pdf(cds, answers)
+
+        except ucp.PortalError:
+            logger.exception("UCP portal generate failed")
+            return render(
+                request,
+                "tracker/ucp_offer.html",
+                {
+                    "report": report,
+                    "portal_down": True,
+                },
+            )
+
+        UCPFiling.objects.create(
+            report=report,
+            district_cds=cds,
+            district_name=spec.get("name", ""),
+            tier=spec.get("tier", ""),
+        )
+
+        safe_name = "".join(
+            c for c in spec.get("name", "district")
+            if c.isalnum() or c in " -"
+        )
+
+        response = HttpResponse(
+            pdf,
+            content_type="application/pdf",
+        )
+
+        response["Content-Disposition"] = (
+            f'attachment; filename="UCP Complaint - {safe_name}.pdf"'
+        )
+
+        return response
+
+    # -----------------------------------------------------------------
+    # STAGE 2: REVIEW + FOLLOW-UPS
+    # -----------------------------------------------------------------
+
+    if cds:
+
+        try:
+            spec = ucp.get_spec(cds)
+            plan = ucp.build_plan(report, spec)
+
+        except ucp.PortalError:
+            logger.exception("UCP portal unavailable")
+            return render(
+                request,
+                "tracker/ucp_offer.html",
+                {
+                    "report": report,
+                    "portal_down": True,
+                },
+            )
+
+        return render(
+            request,
+            "tracker/ucp_followup.html",
+            {
+                "report": report,
+                "spec": spec,
+                "cds": cds,
+                "prefilled": plan["prefilled"],
+                "followups": plan["followups"],
+                "checkbox_fields": plan["checkbox_fields"],
+            },
+        )
+
+    # -----------------------------------------------------------------
+    # STAGE 1: DISTRICT CONFIRMATION
+    # -----------------------------------------------------------------
+
+    school = getattr(report, "school_incident", None)
+
+    district_query = (
+        request.GET.get("district_query")
+        or (school.school_district if school else "")
+        or (school.school_name if school else "")
+    )
+
+    matches = []
+    portal_down = False
+
+    if district_query:
+        try:
+            matches = ucp.match_districts(district_query)
+
+        except ucp.PortalError:
+            logger.exception("UCP portal unavailable")
+            portal_down = True
+
+    return render(
+        request,
+        "tracker/ucp_offer.html",
+        {
+            "report": report,
+            "district_query": district_query,
+            "matches": matches,
+            "portal_down": portal_down,
         },
     )
