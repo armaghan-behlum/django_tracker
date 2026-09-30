@@ -17,6 +17,7 @@ server-to-server; no reporter data goes to the portal until the
 reporter confirms they want the form.
 """
 
+import http.client
 import json
 import re
 import urllib.error
@@ -44,16 +45,30 @@ def _portal_url(path, params=None):
     return url
 
 
+# Covers connection errors, timeouts, resets and truncation raised
+# while OPENING or while READING the response body (URLError is an
+# OSError subclass; IncompleteRead is an HTTPException), plus JSON
+# decode errors.
+_TRANSPORT_ERRORS = (OSError, http.client.HTTPException, ValueError)
+
+
 def _get_json(path, params=None, timeout=15):
     try:
         with urllib.request.urlopen(
             _portal_url(path, params),
             timeout=timeout,
         ) as response:
-            return json.load(response)
+            payload = json.load(response)
 
-    except (urllib.error.URLError, ValueError) as exc:
+    except _TRANSPORT_ERRORS as exc:
         raise PortalError(str(exc)) from exc
+
+    if not isinstance(payload, dict):
+        raise PortalError(
+            f"portal returned an unexpected response for {path}"
+        )
+
+    return payload
 
 
 def match_districts(query):
@@ -62,16 +77,35 @@ def match_districts(query):
     if not query or len(query.strip()) < 2:
         return []
 
-    return _get_json(
+    matches = _get_json(
         "/api/districts",
         {"q": query.strip()},
-    ).get("matches", [])
+    ).get("matches")
+
+    if not isinstance(matches, list):
+        return []
+
+    return [m for m in matches if isinstance(m, dict)]
 
 
 def get_spec(cds):
     """Return the question plan for one district."""
 
-    return _get_json(f"/api/spec/{cds}")
+    spec = _get_json(f"/api/spec/{cds}")
+
+    fields = spec.get("fields")
+
+    if not isinstance(fields, list):
+        raise PortalError(f"portal spec for {cds} has no field list")
+
+    spec["fields"] = [
+        field for field in fields
+        if isinstance(field, dict)
+        and isinstance(field.get("key"), str)
+        and field["key"]
+    ]
+
+    return spec
 
 
 def generate_pdf(cds, answers, timeout=60):
@@ -93,10 +127,19 @@ def generate_pdf(cds, answers, timeout=60):
             request,
             timeout=timeout,
         ) as response:
-            return response.read()
+            pdf = response.read()
 
-    except urllib.error.URLError as exc:
+    except _TRANSPORT_ERRORS as exc:
         raise PortalError(str(exc)) from exc
+
+    # An upstream proxy or the portal itself can answer 200 with an
+    # HTML error page; never record that as a completed complaint.
+    if not pdf.startswith(b"%PDF"):
+        raise PortalError(
+            f"portal returned a non-PDF response for {cds}"
+        )
+
+    return pdf
 
 
 # ---------------------------------------------------------------------
@@ -246,6 +289,14 @@ def known_answers(report):
         ).values_list("option__label", flat=True)
     )
 
+    # The direct questionnaire answer is stored on the report itself,
+    # not as an option selection; without this an explicit "yes" would
+    # vanish from the complaint.
+    if report.anti_palestinian_racism == "yes" and not any(
+        "palestin" in label.lower() for label in basis_labels
+    ):
+        basis_labels.insert(0, "Anti-Palestinian racism")
+
     if basis_labels:
         answers["discrimination_basis"] = ", ".join(basis_labels)
 
@@ -311,6 +362,11 @@ def _terms_for_report(report):
             if len(w) > 3
         )
 
+    # Direct questionnaire answer, stored on the report itself.
+    if report.anti_palestinian_racism == "yes":
+        terms.update(OPTION_TERMS["anti_palestinian_racism"])
+        terms.add("palestinian")
+
     return terms
 
 
@@ -368,6 +424,10 @@ def build_plan(report, spec):
     followups = []
     checkbox_fields = []
 
+    # Only what this district's form asks for — and therefore only
+    # what the reporter sees on the review page — leaves the tracker.
+    submit = {}
+
     for field in fields:
         key = field["key"]
         field_type = field.get("type")
@@ -377,6 +437,8 @@ def build_plan(report, spec):
                 **field,
                 "checked": key in checked,
             })
+            if key in checked:
+                submit[key] = "1"
             continue
 
         value = answers.get(key)
@@ -385,16 +447,14 @@ def build_plan(report, spec):
             prefilled.append(
                 (field.get("label") or key, value)
             )
+            submit[key] = value
 
         else:
             followups.append(field)
-
-    for key in checked:
-        answers[key] = "1"
 
     return {
         "prefilled": prefilled,
         "followups": followups,
         "checkbox_fields": checkbox_fields,
-        "answers": answers,
+        "answers": submit,
     }

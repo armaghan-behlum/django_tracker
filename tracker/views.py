@@ -424,7 +424,8 @@ def incident_report_create(request):
                 )
 
             return redirect(
-                "ucp_offer",
+                "ucp_offer" if ucp_eligible(report)
+                else "incident_report_success",
                 uuid=report.uuid,
             )
 
@@ -545,6 +546,21 @@ def _submitted_report(uuid):
     )
 
 
+def ucp_eligible(report):
+    """
+    UCP complaints only exist for California K-12 school incidents;
+    other reports go straight to the success page.
+    """
+
+    california = getattr(report, "california_details", None)
+
+    return bool(
+        report.state == "CA"
+        and california
+        and california.is_k12_incident
+    )
+
+
 def ucp_offer(request, uuid):
     """
     Post-submit page: offer to prepare the reporter's district UCP
@@ -556,6 +572,12 @@ def ucp_offer(request, uuid):
     """
 
     report = _submitted_report(uuid)
+
+    if not ucp_eligible(report):
+        return redirect(
+            "incident_report_success",
+            uuid=report.uuid,
+        )
 
     cds = (
         request.POST.get("cds")
