@@ -190,6 +190,10 @@ class IncidentReport(models.Model):
         return f"{self.first_name} {self.last_name}".strip()
 
     def clean(self):
+        # Incident-date validation lives on IncidentDetailsForm: this
+        # model is edited through several partial ModelForms (contact,
+        # incident, final), and a partial form crashes when model-wide
+        # clean() raises errors for fields the form does not carry.
         super().clean()
 
         errors = {}
@@ -198,23 +202,6 @@ class IncidentReport(models.Model):
             errors["phone"] = (
                 "Phone number is required for non-California reports."
             )
-
-        if self.date_precision == self.DatePrecision.EXACT:
-            if not self.incident_date:
-                errors["incident_date"] = (
-                    "Please provide the incident date."
-                )
-
-        elif self.date_precision == self.DatePrecision.MONTH:
-            if not self.incident_month:
-                errors["incident_month"] = (
-                    "Please provide the incident month."
-                )
-
-            if not self.incident_year:
-                errors["incident_year"] = (
-                    "Please provide the incident year."
-                )
 
         if errors:
             raise ValidationError(errors)

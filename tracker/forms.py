@@ -338,6 +338,33 @@ class IncidentDetailsForm(forms.ModelForm):
                 ReportOption.Category.INCIDENT_TYPE,
             )
 
+    def clean(self):
+        cleaned_data = super().clean()
+
+        precision = cleaned_data.get("date_precision")
+
+        if precision == IncidentReport.DatePrecision.EXACT:
+            if not cleaned_data.get("incident_date"):
+                self.add_error(
+                    "incident_date",
+                    "Please provide the incident date.",
+                )
+
+        elif precision == IncidentReport.DatePrecision.MONTH:
+            if not cleaned_data.get("incident_month"):
+                self.add_error(
+                    "incident_month",
+                    "Please provide the incident month.",
+                )
+
+            if not cleaned_data.get("incident_year"):
+                self.add_error(
+                    "incident_year",
+                    "Please provide the incident year.",
+                )
+
+        return cleaned_data
+
     def save_options(self, report):
         save_option_selections(
             report,
