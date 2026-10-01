@@ -529,32 +529,7 @@
 
 
     {# ========================================================== #}
-    {# 5. CALIFORNIA K-12 #}
-    {# ========================================================== #}
-
-    <section
-        class="form-section conditional-section"
-        id="california-section"
-    >
-
-        <h2>California K&ndash;12</h2>
-
-        {{ california_form.is_k12_incident|as_crispy_field }}
-
-        <div
-            id="k12-district-fields"
-            class="conditional-section"
-        >
-            {{ formal_complaint_form.previously_submitted_to_district|as_crispy_field }}
-
-            {{ formal_complaint_form.authorize_autopopulation|as_crispy_field }}
-        </div>
-
-    </section>
-
-
-    {# ========================================================== #}
-    {# 6. LOCATION #}
+    {# LOCATION #}
     {# ========================================================== #}
 
     <section class="form-section">
@@ -583,6 +558,31 @@
             class="conditional-section"
         >
             {{ incident_form.location_types_other|as_crispy_field }}
+        </div>
+
+    </section>
+
+
+    {# ========================================================== #}
+    {# CALIFORNIA K-12 #}
+    {# ========================================================== #}
+
+    <section
+        class="form-section conditional-section"
+        id="california-section"
+    >
+
+        <h2>California K&ndash;12</h2>
+
+        {{ california_form.is_k12_incident|as_crispy_field }}
+
+        <div
+            id="k12-district-fields"
+            class="conditional-section"
+        >
+            {{ formal_complaint_form.previously_submitted_to_district|as_crispy_field }}
+
+            {{ formal_complaint_form.authorize_autopopulation|as_crispy_field }}
         </div>
 
     </section>
