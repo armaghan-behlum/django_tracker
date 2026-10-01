@@ -81,6 +81,8 @@ def should_show_school_form(
 
 def incident_report_create(request):
 
+    error_sections = []
+
     if request.method == "POST":
 
         # ---------------------------------------------------------
@@ -308,17 +310,51 @@ def incident_report_create(request):
                 # -------------------------------------------------
                 # AFFECTED PERSON
                 # -------------------------------------------------
-                # The form no longer asks who was affected (the CA
-                # parent question collects the child's name), but
-                # demographics still hang off an AffectedPerson row,
-                # so create the default reporter-is-affected record.
+                # The form no longer asks who was affected directly.
+                # A CA parent names their child, and the doc says the
+                # identity/demographics questions then describe the
+                # child — so the child is the affected person. In
+                # every other case the reporter is.
 
-                affected_person = AffectedPerson(
-                    report=report,
-                    is_reporter=True,
-                    first_name=report.first_name,
-                    last_name=report.last_name,
-                )
+                reporter_role = ""
+                child_name = ""
+
+                if california_form:
+                    reporter_role = (
+                        california_form.cleaned_data.get(
+                            "reporter_role"
+                        )
+                    )
+
+                    child_name = (
+                        california_form.cleaned_data.get(
+                            "child_full_name",
+                            "",
+                        ).strip()
+                    )
+
+                if reporter_role == "parent" and child_name:
+                    child_first, _, child_last = (
+                        child_name.rpartition(" ")
+                    )
+
+                    if not child_first:
+                        child_first, child_last = child_last, ""
+
+                    affected_person = AffectedPerson(
+                        report=report,
+                        is_reporter=False,
+                        first_name=child_first,
+                        last_name=child_last,
+                    )
+
+                else:
+                    affected_person = AffectedPerson(
+                        report=report,
+                        is_reporter=True,
+                        first_name=report.first_name,
+                        last_name=report.last_name,
+                    )
 
                 affected_person.full_clean()
                 affected_person.save()
@@ -411,8 +447,21 @@ def incident_report_create(request):
                     report
                 )
 
+            # Offer the UCP hand-off only to reporters who said yes
+            # to autopopulating a formal complaint; everyone else
+            # (including an explicit "No") goes to the success page.
+            # The /ucp/ endpoint itself stays CA-K-12 gated, so a
+            # saved link still works if they change their mind.
+            authorized = bool(
+                formal_complaint_form
+                and formal_complaint_form.cleaned_data.get(
+                    "authorize_autopopulation"
+                )
+            )
+
             return redirect(
-                "ucp_offer" if ucp_eligible(report)
+                "ucp_offer"
+                if ucp_eligible(report) and authorized
                 else "incident_report_success",
                 uuid=report.uuid,
             )
@@ -450,6 +499,26 @@ def incident_report_create(request):
                 request.POST,
                 prefix="referral",
             )
+
+        # ---------------------------------------------------------
+        # ERROR SUMMARY
+        # ---------------------------------------------------------
+        # Name the parts of the form that need attention; the page
+        # scrolls to the first invalid field on load.
+
+        for form, section in [
+            (contact_form, "Consent and contact information"),
+            (referral_form, "Where should we report this incident"),
+            (incident_form, "Incident details"),
+            (california_form, "California K-12"),
+            (school_form, "School information"),
+            (formal_complaint_form, "California K-12 complaint"),
+            (demographics_form, "Experiences, impacts and identity"),
+            (final_form, "Signature and final questions"),
+            (attachment_form, "Supporting materials"),
+        ]:
+            if form.is_bound and form.errors:
+                error_sections.append(section)
 
     else:
 
@@ -510,6 +579,7 @@ def incident_report_create(request):
         "referral_form": referral_form,
         "attachment_form": attachment_form,
         "data_retention_doc_url": settings.DATA_RETENTION_DOC_URL,
+        "error_sections": error_sections,
     }
 
     return render(

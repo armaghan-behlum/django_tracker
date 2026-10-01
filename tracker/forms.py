@@ -200,6 +200,19 @@ class IncidentContactForm(forms.ModelForm):
         # The doc starts the state drop-down on California.
         self.fields["state"].initial = "CA"
 
+        # Consent is server-required (clean_has_consented); mark it
+        # required so the asterisk convention shows it, with the
+        # same message. Crispy's checkbox template renders no
+        # asterisk, so the label carries it directly.
+        self.fields["has_consented"].required = True
+        self.fields["has_consented"].error_messages["required"] = (
+            "You must consent before submitting this form."
+        )
+        self.fields["has_consented"].label = (
+            "I have read the above information, I am 13 or "
+            "older, and I agree to participate.*"
+        )
+
     def clean_has_consented(self):
         value = self.cleaned_data["has_consented"]
 
@@ -940,6 +953,20 @@ class FormalSchoolComplaintForm(forms.ModelForm):
             ),
         }
 
+    # Everything the reporter only sees after authorizing the formal
+    # complaint. Without authorization these fields are hidden, so
+    # they must neither block submission nor be saved.
+    DETAIL_FIELDS = [
+        "complaint_against",
+        "individuals_involved",
+        "witnesses",
+        "discussed_with_principal_or_supervisor",
+        "concerns_addressed_to",
+        "concerns_addressed_date",
+        "requested_remedy",
+        "complainant_address",
+    ]
+
     def clean(self):
         cleaned_data = super().clean()
 
@@ -961,6 +988,21 @@ class FormalSchoolComplaintForm(forms.ModelForm):
                         field,
                         message,
                     )
+
+        else:
+            for field in self.DETAIL_FIELDS:
+                # A hidden field can carry a stale or invalid value
+                # (e.g. a half-typed date before the reporter
+                # answered "No"); drop its error and its value.
+                self.errors.pop(field, None)
+
+                model_field = (
+                    self._meta.model._meta.get_field(field)
+                )
+
+                cleaned_data[field] = (
+                    "" if not model_field.null else None
+                )
 
         return cleaned_data
 
@@ -1141,6 +1183,18 @@ class FinalQuestionsForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # The signature is server-required (clean_* below); mark the
+        # fields required so the asterisk convention shows it. The
+        # messages match the clean_* ones the reporter already saw.
+        self.fields["signature_name"].required = True
+        self.fields["signature_name"].error_messages["required"] = (
+            "Please provide your digital signature."
+        )
+        self.fields["signature_date"].required = True
+        self.fields["signature_date"].error_messages["required"] = (
+            "Please provide the signature date."
+        )
+
         # Human verification, only when keys are configured so local
         # development without hCaptcha keys keeps working.
         if settings.HCAPTCHA_SITEKEY:
@@ -1191,6 +1245,8 @@ class FinalQuestionsForm(forms.ModelForm):
             ),
             "additional_information": "Optional!",
             "support_sought_elsewhere": "",
+            # The label already says everything.
+            "opt_out_of_followup": "",
         }
 
         widgets = {
@@ -1300,10 +1356,6 @@ class ReferralForm(forms.Form):
     submit_pal_legal = forms.BooleanField(
         required=False,
         label="Palestine Legal",
-        help_text=(
-            "A trusted pro-Palestine organization that can pursue "
-            "legal action."
-        ),
     )
 
     anonymous_pal_legal = forms.BooleanField(
