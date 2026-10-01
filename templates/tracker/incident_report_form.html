@@ -18,6 +18,12 @@
         gap: 0 1.5rem;
     }
 
+    .option-grid.option-grid-single
+        div[id^="div_id_"] > div:not(.form-check),
+    .option-grid.option-grid-single .option-grid-items {
+        grid-template-columns: 1fr;
+    }
+
     .option-grid .form-check {
         break-inside: avoid;
         margin-bottom: 0.5rem;
@@ -446,7 +452,7 @@
         </p>
 
         <div
-            class="option-grid"
+            class="option-grid option-grid-single"
             role="group"
             aria-labelledby="racism-types-heading"
         >
@@ -669,15 +675,9 @@
             class="conditional-section"
             id="school-ucp-fields"
         >
-            <div class="row">
-                <div class="col-md-6">
-                    {{ school_form.grade|as_crispy_field }}
-                </div>
+            {{ school_form.grade|as_crispy_field }}
 
-                <div class="col-md-6">
-                    {{ school_form.principal|as_crispy_field }}
-                </div>
-            </div>
+            {{ school_form.principal|as_crispy_field }}
 
             {{ school_form.location_within_school|as_crispy_field }}
         </div>
