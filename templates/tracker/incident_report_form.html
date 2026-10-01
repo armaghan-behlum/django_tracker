@@ -7,26 +7,130 @@
 
 {% block content %}
 
+<style>
+    /* Long checkbox lists render as a responsive grid so the page
+       stays short (matrix layout per the 9.21 questionnaire). */
+    .option-grid div[id^="div_id_"] > div:not(.form-check),
+    .option-grid .option-grid-items {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 0 1.5rem;
+    }
+
+    .option-grid .form-check {
+        break-inside: avoid;
+        margin-bottom: 0.5rem;
+    }
+
+    details.info-dropdown {
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        border-radius: 0.375rem;
+        padding: 0.75rem 1rem;
+        margin: 0.75rem 0 1rem;
+        background: var(--bs-tertiary-bg, #f8f9fa);
+    }
+
+    details.info-dropdown summary {
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    details.info-dropdown[open] summary {
+        margin-bottom: 0.5rem;
+    }
+
+    .apr-definitions dt {
+        margin-top: 0.6rem;
+    }
+
+    .org-choice {
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        border-radius: 0.375rem;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .org-choice .org-anonymous {
+        margin-left: 1.75rem;
+        margin-top: 0.25rem;
+    }
+</style>
+
 <div class="mb-4">
     <h1 class="mb-3">
         AROC Education Discrimination & Censorship Tracker
     </h1>
 
+    <p class="fst-italic">
+        Need help filling out this form? Call us at 415-861-7444
+        between 10AM and 5PM PT. A member of our staff can help you
+        fill it out or arrange time to fill it out together.
+    </p>
+
     <p class="lead">
-        Report an incident of hate, racism, discrimination,
-        censorship, or repression.
+        This is a national tracker for incidents of hate, racism, or
+        repression against Palestinian, Arab, allied, and other
+        BAMEMSA individuals. It covers schools and other settings
+        across the country. Reporting here helps us fight back
+        against the growing racism and repression facing our
+        communities and our kids.
+    </p>
+
+    <p>
+        AROC Action and researchers from the Institute for
+        Understanding Anti-Palestinian Racism (IUAPR) developed this
+        tool together. We will use it to understand and challenge the
+        many types of discrimination our communities face.
+    </p>
+
+    <p>
+        For individuals in California, this tracker also allows you
+        to choose if you want to submit to statewide incident
+        registries that help us respond to unfair laws and racist
+        trends in California schools and other settings.
+        <strong><em>Californians can also choose if they want to
+        receive direct follow-up support from AROC or legal advisors
+        at K-12 Defense, PalLegal and/or CAIR.</em></strong>
+        <em>This form does not in itself constitute legal
+        advice.</em>
     </p>
 
     <div class="privacy-box">
-        <strong>Privacy and anonymity</strong>
+        <strong>Privacy and Anonymity</strong>
 
         <p class="mb-0 mt-2">
-            Your information will be kept private and confidential.
-            Incident information used for research or public reporting
-            will be anonymized unless you explicitly authorize your
-            story or identifying information to be shared.
+            <strong><em>Nothing you submit will be identified with
+            you and shared anywhere beyond the research team without
+            your permission.</em></strong>
+            <strong><em>When you fill out this form, all of the
+            information is encrypted and kept secure, private, and
+            confidential. Any incident data will be anonymized so
+            that nothing can be traced back to you unless you want
+            to share your story publicly.</em></strong>
         </p>
     </div>
+
+    <details class="info-dropdown">
+        <summary>
+            Read more about how the data is securely collected and
+            stored
+        </summary>
+
+        <p class="mb-2">
+            When you fill out this form, all of the information is
+            encrypted and kept secure, private, and confidential.
+            Nothing you submit will be identified with you and
+            shared anywhere beyond the research team without your
+            permission.
+        </p>
+
+        <p class="mb-0">
+            Any incident data used for research or public reporting
+            will be anonymized so that nothing can be traced back to
+            you unless you want to share your story publicly. You
+            may opt out of any contact.
+        </p>
+    </details>
 
     <p class="required-note">
         Fields marked with an asterisk are required.
@@ -135,12 +239,104 @@
 
 
     {# ========================================================== #}
-    {# 2. AFFECTED PERSON #}
+    {# 2. WHERE SHOULD THIS REPORT GO? (CA ONLY) #}
+    {# ========================================================== #}
+
+    <section
+        class="form-section conditional-section"
+        id="referral-section"
+    >
+
+        <h2>
+            2. Please select where, if at all, you would like us to
+            report this incident
+        </h2>
+
+        <p>
+            In this form, you can choose to submit your information
+            to multiple organizations in addition to AROC and IUAPR.
+            Each submission remains secure and confidential to that
+            organization. You may want to submit to these
+            organizations for support seeking legal action, but you
+            may also choose to anonymize your information to them
+            for research purposes only:
+        </p>
+
+        <p class="fst-italic">
+            Please note that if you choose to make your information
+            anonymous, you are opting out of any follow-up about
+            your experience.
+        </p>
+
+        <div class="org-choice">
+            {{ referral_form.submit_k12_legal|as_crispy_field }}
+
+            <div
+                class="org-anonymous conditional-section"
+                id="k12-anonymous"
+            >
+                {{ referral_form.anonymous_k12_legal|as_crispy_field }}
+            </div>
+        </div>
+
+        <div class="org-choice">
+            {{ referral_form.submit_cair|as_crispy_field }}
+
+            <div
+                class="org-anonymous conditional-section"
+                id="cair-anonymous"
+            >
+                {{ referral_form.anonymous_cair|as_crispy_field }}
+            </div>
+        </div>
+
+        <div class="org-choice">
+            <div class="form-check mb-1">
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    checked
+                    disabled
+                    id="aroc-default"
+                >
+                <label
+                    class="form-check-label"
+                    for="aroc-default"
+                >
+                    Submit to AROC / IUAPR
+                </label>
+            </div>
+
+            <p class="text-muted mb-1 ms-4">
+                Submitting this form shares your report with AROC
+                and IUAPR.
+            </p>
+
+            <div class="org-anonymous">
+                {{ referral_form.aroc_anonymous|as_crispy_field }}
+            </div>
+        </div>
+
+        <p class="mt-3 mb-0">
+            For online hate or repression, we recommend filling out
+            an incident report with 7amleh:
+            <a
+                href="https://7or.7amleh.org/"
+                target="_blank"
+                rel="noopener"
+            >https://7or.7amleh.org/</a>
+        </p>
+
+    </section>
+
+
+    {# ========================================================== #}
+    {# 3. AFFECTED PERSON #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>2. About the person who experienced the incident</h2>
+        <h2>3. About the person who experienced the incident</h2>
 
         <p class="text-muted">
             Please let us know whether this incident happened to you
@@ -168,12 +364,12 @@
 
 
     {# ========================================================== #}
-    {# 3. BASIC INCIDENT DETAILS #}
+    {# 4. BASIC INCIDENT DETAILS #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>3. Tell us what happened</h2>
+        <h2>4. Tell us what happened</h2>
 
         {{ incident_form.date_precision|as_crispy_field }}
 
@@ -210,12 +406,12 @@
 
 
     {# ========================================================== #}
-    {# 4. INCIDENT TYPE #}
+    {# 5. INCIDENT TYPE #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>4. About the incident</h2>
+        <h2>5. About the incident</h2>
 
         <h3>
             Did the incident involve any of these forms of racism?
@@ -225,17 +421,22 @@
             Select all that apply.
         </p>
 
-        {{ incident_form.racism_types|as_crispy_field }}
+        <div class="option-grid">
+            {{ incident_form.racism_types|as_crispy_field }}
+        </div>
 
         <hr>
 
-        <h3>Where did the incident take place?</h3>
+        <h3>What kind of location did the incident take place at?</h3>
 
         <p class="text-muted">
-            Select all that apply.
+            You may select multiple options. If Other, type it in
+            the box.
         </p>
 
-        {{ incident_form.location_types|as_crispy_field }}
+        <div class="option-grid">
+            {{ incident_form.location_types|as_crispy_field }}
+        </div>
 
         <hr>
 
@@ -245,11 +446,72 @@
             Select all that apply.
         </p>
 
-        {{ incident_form.incident_types|as_crispy_field }}
+        <div class="option-grid">
+            {{ incident_form.incident_types|as_crispy_field }}
+        </div>
 
         <hr>
 
         {{ incident_form.anti_palestinian_racism|as_crispy_field }}
+
+        <details class="info-dropdown">
+            <summary>
+                What is anti-Palestinian racism?
+            </summary>
+
+            <p class="mb-1">
+                <em>Anti-Palestinian racism is a form of systemic
+                racism that works to silence, exclude, erase,
+                stereotype, defame, or treat Palestinians and their
+                stories as less than human. It shows up in many ways
+                and can include:</em>
+            </p>
+
+            <dl class="apr-definitions mb-0">
+                <dt>Nakba Denial</dt>
+                <dd class="mb-1">
+                    Discrediting the factual basis of Palestinian
+                    expulsion in 1948 and other massacres.
+                </dd>
+
+                <dt>Justifying Violence Against Palestinians</dt>
+                <dd class="mb-1">
+                    E.g. bullying or threatening a student for
+                    wearing a keffiyeh or standing up for
+                    Palestinian rights.
+                </dd>
+
+                <dt>Denying Palestinians are Indigenous to
+                Palestine</dt>
+                <dd class="mb-1">
+                    With their own identity and rights.
+                </dd>
+
+                <dt>Erasing Palestinian Human Rights</dt>
+                <dd class="mb-1">
+                    And their equal dignity and worth, e.g. not
+                    being allowed to talk about what is happening to
+                    Palestinians, related news stories or
+                    experiences.
+                </dd>
+
+                <dt>Excluding Palestinians or Palestinian
+                perspectives</dt>
+                <dd class="mb-1">
+                    And stories, or pressuring others to exclude
+                    them, e.g. not being allowed to join a club or
+                    host an event.
+                </dd>
+
+                <dt>Defaming Palestinians or their allies</dt>
+                <dd class="mb-0">
+                    With slander, such as calling them inherently
+                    anti-semitic, a terrorist threat or supporter,
+                    against democracy, or falsely associating them
+                    with Palestinian political factions.
+                </dd>
+            </dl>
+        </details>
 
         {{ incident_form.knows_of_other_apr_incidents|as_crispy_field }}
 
@@ -259,7 +521,7 @@
 
 
     {# ========================================================== #}
-    {# 5. CALIFORNIA SECTION #}
+    {# 6. CALIFORNIA SECTION #}
     {# ========================================================== #}
 
     <section
@@ -267,11 +529,25 @@
         id="california-section"
     >
 
-        <h2>5. California-specific information</h2>
+        <h2>6. California-specific information</h2>
 
         {{ california_form.is_k12_incident|as_crispy_field }}
 
         {{ california_form.reporter_role|as_crispy_field }}
+
+        <div
+            id="teacher-retaliation-note"
+            class="conditional-section"
+        >
+            <p class="text-muted">
+                Please note that if you choose to submit an official
+                complaint through this form, while the District will
+                maintain your information confidentially and you are
+                nominally protected from retaliation by law for
+                filing this complaint, schools or districts may find
+                other ways to retaliate.
+            </p>
+        </div>
 
         <div
             id="reporter-role-other"
@@ -300,7 +576,7 @@
 
 
     {# ========================================================== #}
-    {# 6. SCHOOL SECTION #}
+    {# 7. SCHOOL SECTION #}
     {# ========================================================== #}
 
     <section
@@ -308,7 +584,7 @@
         id="school-section"
     >
 
-        <h2>6. School information</h2>
+        <h2>7. School information</h2>
 
         <div class="row">
             <div class="col-md-7">
@@ -375,13 +651,18 @@
         <hr>
 
 
-        <h3>Educational impacts</h3>
+        <h3>
+            Educational impacts: What were the impacts of this
+            incident on your experience in school?
+        </h3>
 
         <p class="text-muted">
             Select all that apply.
         </p>
 
-        {{ school_form.educational_impacts|as_crispy_field }}
+        <div class="option-grid">
+            {{ school_form.educational_impacts|as_crispy_field }}
+        </div>
 
         <div
             id="absence-frequency"
@@ -402,7 +683,7 @@
 
         <div
             id="nonreport-reasons"
-            class="conditional-section"
+            class="conditional-section option-grid"
         >
             {{ school_form.nonreport_reasons|as_crispy_field }}
         </div>
@@ -413,7 +694,7 @@
 
 
     {# ========================================================== #}
-    {# 7. FORMAL CA K-12 COMPLAINT #}
+    {# 8. FORMAL CA K-12 COMPLAINT #}
     {# ========================================================== #}
 
     <section
@@ -421,7 +702,7 @@
         id="formal-complaint-section"
     >
 
-        <h2>7. California K–12 complaint</h2>
+        <h2>8. California K–12 complaint</h2>
 
         {{ formal_complaint_form.previously_submitted_to_district|as_crispy_field }}
 
@@ -454,34 +735,44 @@
 
 
     {# ========================================================== #}
-    {# 8. EXPERIENCES + IMPACTS #}
+    {# 9. EXPERIENCES + IMPACTS #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>8. Experiences and impacts</h2>
+        <h2>9. Experiences and impacts</h2>
 
         <h3>
-            What forms of discrimination or repression did you experience?
+            In this or other instances, did you experience any of
+            the following?
         </h3>
 
         <p class="text-muted">
-            Select all that apply.
+            Related to your ethnicity, race, or nationality; your
+            association with people of a particular race, ethnicity,
+            or nationality; or your respect for Palestinian human
+            rights. Select all that apply.
         </p>
 
-        {{ demographics_form.discrimination_experiences|as_crispy_field }}
+        <div class="option-grid">
+            {{ demographics_form.discrimination_experiences|as_crispy_field }}
+        </div>
 
         <hr>
 
         <h3>
-            What impacts did this have on your well-being?
+            Regarding your personal well-being and health, what
+            impacts did you experience as a result of this incident?
         </h3>
 
         <p class="text-muted">
-            Select all that apply.
+            For example, anxiety, headaches, hypervigilance,
+            self-doubt, etc. Select all that apply.
         </p>
 
-        {{ demographics_form.wellbeing_impacts|as_crispy_field }}
+        <div class="option-grid">
+            {{ demographics_form.wellbeing_impacts|as_crispy_field }}
+        </div>
 
         <hr>
 
@@ -491,12 +782,12 @@
 
 
     {# ========================================================== #}
-    {# 9. DEMOGRAPHICS #}
+    {# 10. DEMOGRAPHICS #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>9. Identity and demographics</h2>
+        <h2>10. Identity and demographics</h2>
 
         <p class="text-muted">
             If you are filling this form out on behalf of someone
@@ -505,33 +796,43 @@
         </p>
 
         <h3>
-            What aspects of identity may have been targeted?
+            If any, what aspects of your identity do you believe may
+            have been targeted in this incident?
         </h3>
 
         <p class="text-muted">
             Select all that apply.
         </p>
 
-        {{ demographics_form.targeted_identities|as_crispy_field }}
+        <div class="option-grid">
+            {{ demographics_form.targeted_identities|as_crispy_field }}
+        </div>
 
 
         <hr>
 
 
-        <h3>Race and/or ethnicity</h3>
+        <h3>What is your race and/or ethnicity?</h3>
 
         <p class="text-muted">
-            Choose up to three.
+            Choose up to three representing the ones you most
+            identify with.
         </p>
 
-        {{ demographics_form.race_ethnicity|as_crispy_field }}
+        <div class="option-grid">
+            {{ demographics_form.race_ethnicity|as_crispy_field }}
+        </div>
 
 
         <div
             id="arab-palestinian-section"
             class="conditional-section mt-4"
         >
-            <h3>Arab / Palestinian identity</h3>
+            <h3>Do you identify as Arab or Palestinian?</h3>
+
+            <p class="text-muted">
+                Check all that apply.
+            </p>
 
             {{ demographics_form.arab_palestinian_identity|as_crispy_field }}
         </div>
@@ -566,43 +867,6 @@
 
 
     {# ========================================================== #}
-    {# 10. CALIFORNIA REFERRALS #}
-    {# ========================================================== #}
-
-    <section
-        class="form-section conditional-section"
-        id="referral-section"
-    >
-
-        <h2>10. California referrals and support</h2>
-
-        <p>
-            You may choose to have this incident shared with
-            organizations that can provide support or legal assistance.
-        </p>
-
-        {{ referral_form.organizations|as_crispy_field }}
-
-
-        <hr>
-
-
-        <h3>Anonymous submissions</h3>
-
-        <p class="text-muted">
-            If you select an organization below, your incident
-            information will be shared anonymously and you will not
-            receive individual follow-up from that organization.
-        </p>
-
-        {{ referral_form.anonymous_organizations|as_crispy_field }}
-
-        {{ final_form.support_sought_elsewhere|as_crispy_field }}
-
-    </section>
-
-
-    {# ========================================================== #}
     {# 11. ATTACHMENTS #}
     {# ========================================================== #}
 
@@ -629,6 +893,13 @@
         <h2>12. Anything else?</h2>
 
         {{ final_form.additional_information|as_crispy_field }}
+
+        <div
+            id="ca-support-question"
+            class="conditional-section"
+        >
+            {{ final_form.support_sought_elsewhere|as_crispy_field }}
+        </div>
 
         <div
             id="non-ca-followup"
@@ -820,7 +1091,38 @@ document.addEventListener("DOMContentLoaded", function () {
             !isCalifornia
         );
 
+        setVisible(
+            "ca-support-question",
+            isCalifornia
+        );
+
         return isCalifornia;
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * REFERRAL ANONYMIZE SUB-OPTIONS
+     * ----------------------------------------------------------
+     */
+
+    function isChecked(id) {
+        const el = document.getElementById(id);
+        return !!(el && el.checked);
+    }
+
+
+    function updateReferrals() {
+
+        setVisible(
+            "k12-anonymous",
+            isChecked("id_referral-submit_k12_legal")
+        );
+
+        setVisible(
+            "cair-anonymous",
+            isChecked("id_referral-submit_cair")
+        );
     }
 
 
@@ -849,6 +1151,11 @@ document.addEventListener("DOMContentLoaded", function () {
         setVisible(
             "reporter-role-other",
             role === "other"
+        );
+
+        setVisible(
+            "teacher-retaliation-note",
+            role === "teacher"
         );
     }
 
@@ -1062,7 +1369,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function updateAbsenceFrequency() {
 
+        // The 9.21 questionnaire keys this on "avoid school";
+        // "miss school" is kept too since the question asks about
+        // missing school.
         const missedSchool =
+            checkboxWithLabelContains(
+                "school-educational_impacts",
+                "avoid school"
+            ) ||
             checkboxWithLabelContains(
                 "school-educational_impacts",
                 "miss school"
@@ -1110,6 +1424,8 @@ document.addEventListener("DOMContentLoaded", function () {
         updateArabPalestinian();
 
         updateAbsenceFrequency();
+
+        updateReferrals();
     }
 
 
