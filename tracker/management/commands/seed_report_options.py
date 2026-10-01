@@ -41,7 +41,7 @@ class Command(BaseCommand):
 
                 (
                     "anti_muslim_hate",
-                    "Anti-Muslim Hate or Islamophobia",
+                    "Anti-Muslim Hate / Racism or Islamophobia",
                     False,
                 ),
 
