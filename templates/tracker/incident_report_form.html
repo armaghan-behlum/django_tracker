@@ -1301,6 +1301,36 @@ document.addEventListener("DOMContentLoaded", function () {
 
     /*
      * ----------------------------------------------------------
+     * PHONE: REQUIRED OUTSIDE CALIFORNIA
+     * ----------------------------------------------------------
+     */
+
+    function updatePhoneRequired() {
+
+        const state = value("id_contact-state");
+
+        const phone = document.getElementById("id_contact-phone");
+
+        if (!phone) {
+            return;
+        }
+
+        const required = !!state && state !== "CA";
+
+        phone.required = required;
+
+        const label = document.querySelector(
+            'label[for="id_contact-phone"]'
+        );
+
+        if (label) {
+            label.textContent = required ? "Phone*" : "Phone";
+        }
+    }
+
+
+    /*
+     * ----------------------------------------------------------
      * SCHOOL SECTION
      * ----------------------------------------------------------
      */
@@ -1612,6 +1642,8 @@ document.addEventListener("DOMContentLoaded", function () {
         updateDateFields();
 
         updateCalifornia();
+
+        updatePhoneRequired();
 
         updateReporterRole();
 

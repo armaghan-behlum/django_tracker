@@ -210,21 +210,6 @@ class IncidentContactForm(forms.ModelForm):
 
         return value
 
-    def clean(self):
-        cleaned_data = super().clean()
-
-        state = cleaned_data.get("state")
-        phone = cleaned_data.get("phone")
-
-        if state and state != "CA" and not phone:
-            self.add_error(
-                "phone",
-                "Phone number is required for non-California reports.",
-            )
-
-        return cleaned_data
-
-
 # ---------------------------------------------------------------------
 # AFFECTED PERSON
 # ---------------------------------------------------------------------
