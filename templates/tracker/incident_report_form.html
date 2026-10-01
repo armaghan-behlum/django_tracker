@@ -663,18 +663,9 @@
             </div>
         </div>
 
-        {# Doc: "If School and UCP" — only once the reporter has #}
-        {# authorized the district complaint. #}
-        <div
-            class="conditional-section"
-            id="school-ucp-fields"
-        >
-            {{ school_form.grade|as_crispy_field }}
+        {{ school_form.grade|as_crispy_field }}
 
-            {{ school_form.principal|as_crispy_field }}
-
-            {{ school_form.location_within_school|as_crispy_field }}
-        </div>
+        {{ school_form.location_within_school|as_crispy_field }}
 
     </section>
 
@@ -1435,7 +1426,6 @@ document.addEventListener("DOMContentLoaded", function () {
             "id_california-student_date_of_birth",
             "id_california-child_full_name",
             "id_school-grade",
-            "id_school-principal",
             "id_school-location_within_school",
             "id_school-educational_requirement_violated",
         ].forEach(function (id) {
@@ -1533,16 +1523,6 @@ document.addEventListener("DOMContentLoaded", function () {
             isCalifornia && isK12
         );
 
-        // Grade, principal and where-in-the-school only matter for
-        // the district complaint ("If School and UCP" in the doc).
-        const authorized = checkedValue(
-            "formal-authorize_autopopulation"
-        );
-
-        setVisible(
-            "school-ucp-fields",
-            showSchool && authorized === "True"
-        );
     }
 
 

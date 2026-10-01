@@ -373,10 +373,11 @@ class SchoolIncident(models.Model):
 
     class SchoolType(models.TextChoices):
         PUBLIC = ("public", "Public")
-        PRIVATE_SECULAR = ("private_secular", "Private — Secular")
-        PRIVATE_RELIGIOUS = ("private_religious",
-            "Private — Religious / Parochial")
+        SECULAR = ("secular", "Secular")
+        PRIVATE = ("private", "Private")
         CHARTER = ("charter", "Charter")
+        PRIVATE_RELIGIOUS = ("private_religious",
+            "Religious/Parochial Private")
         OTHER = ("other", "Other")
 
     class ResponseEffect(models.TextChoices):

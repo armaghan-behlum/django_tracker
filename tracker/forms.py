@@ -773,7 +773,6 @@ class SchoolIncidentForm(forms.ModelForm):
             "school_name",
             "school_district",
             "grade",
-            "principal",
             "location_within_school",
             "school_type",
             "school_type_other",
@@ -795,7 +794,6 @@ class SchoolIncidentForm(forms.ModelForm):
                 "Grade of student or grade you teach; if not "
                 "applicable, write n/a"
             ),
-            "principal": "Principal",
             "location_within_school": (
                 "Where in the school did it happen?"
             ),
@@ -854,9 +852,6 @@ class SchoolIncidentForm(forms.ModelForm):
                 attrs={"class": "form-control"}
             ),
             "grade": forms.TextInput(
-                attrs={"class": "form-control"}
-            ),
-            "principal": forms.TextInput(
                 attrs={"class": "form-control"}
             ),
             "location_within_school": forms.TextInput(
@@ -936,24 +931,19 @@ class SchoolIncidentForm(forms.ModelForm):
                 "educational_requirement_violated": (
                     "Please answer; if none applies, write \"none\"."
                 ),
+                "grade": (
+                    "Please provide the grade; if not applicable, "
+                    "write n/a."
+                ),
+                "location_within_school": (
+                    "Please tell us where in the school it happened."
+                ),
             })
 
         if ca_k12:
             required["school_district"] = (
                 "Please provide the school district."
             )
-
-        if school_location and authorize:
-            required.update({
-                "grade": (
-                    "Please provide the grade; if not applicable, "
-                    "write n/a."
-                ),
-                "principal": "Please provide the principal's name.",
-                "location_within_school": (
-                    "Please tell us where in the school it happened."
-                ),
-            })
 
         for name, message in required.items():
             self.fields[name].required = True
