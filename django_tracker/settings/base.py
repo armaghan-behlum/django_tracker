@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'django_extensions',
     'storages',
     'anymail',
+    'hcaptcha',
 ]
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
@@ -185,6 +186,23 @@ class HerokuDiscoverRunner(DiscoverRunner):
 # Use HerokuDiscoverRunner on Heroku CI
 if "CI" in os.environ:
     TEST_RUNNER = "gettingstarted.settings.HerokuDiscoverRunner"
+# ---------------------------------------------------------------------
+# HCAPTCHA (human verification on the intake form)
+# ---------------------------------------------------------------------
+# The captcha field only appears when a site key is configured, so
+# local development without keys keeps working.
+HCAPTCHA_SITEKEY = os.environ.get("HCAPTCHA_SITEKEY", "")
+HCAPTCHA_SECRET = os.environ.get("HCAPTCHA_SECRET", "")
+
+# Public information sheet / data retention policy linked from the
+# intake form. Overridable so the link can be corrected without a
+# deploy.
+DATA_RETENTION_DOC_URL = os.environ.get(
+    "DATA_RETENTION_DOC_URL",
+    "https://docs.google.com/document/d/"
+    "1xSgz9NWLm-LIX1k4I75pnhXFrdoXPJxt3lVT3h04NYk/edit?tab=t.0",
+)
+
 # ---------------------------------------------------------------------
 # UCP PORTAL
 # ---------------------------------------------------------------------

@@ -1,5 +1,8 @@
 from django import forms
+from django.conf import settings
 from django.forms import ClearableFileInput
+
+from hcaptcha.fields import hCaptchaField
 
 from .models import (
     IncidentReport,
@@ -1125,6 +1128,16 @@ class DemographicsImpactForm(forms.ModelForm):
 
 class FinalQuestionsForm(forms.ModelForm):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Human verification, only when keys are configured so local
+        # development without hCaptcha keys keeps working.
+        if settings.HCAPTCHA_SITEKEY:
+            self.fields["captcha"] = hCaptchaField(
+                label="Verify you are human",
+            )
+
     class Meta:
         model = IncidentReport
 
@@ -1233,12 +1246,16 @@ class FinalQuestionsForm(forms.ModelForm):
 
 class ReferralForm(forms.Form):
     """
-    CA-only: where, if at all, the incident should be reported.
+    Where, if at all, the incident should be reported.
 
     By submitting the form, the reporter is already sharing the
     incident with AROC and IUAPR; the only AROC/IUAPR decision here
     is whether to anonymize (which opts out of follow-up). The other
     organizations are opt-in, each with its own anonymize choice.
+    California reporters choose among K-12 Legal Defense and the
+    local CAIR chapter; reporters in other states choose Palestine
+    Legal. Saving only writes the organizations that apply to the
+    report's state.
 
     Anonymize choices are nested under their organization in the
     template; an anonymize box without its organization selected is
@@ -1270,6 +1287,20 @@ class ReferralForm(forms.Form):
         label="Make anonymous (not seeking legal counsel)",
     )
 
+    submit_pal_legal = forms.BooleanField(
+        required=False,
+        label="Palestine Legal",
+        help_text=(
+            "A trusted pro-Palestine organization that can pursue "
+            "legal action."
+        ),
+    )
+
+    anonymous_pal_legal = forms.BooleanField(
+        required=False,
+        label="Make anonymous (not seeking legal counsel)",
+    )
+
     aroc_anonymous = forms.BooleanField(
         required=False,
         label="Make anonymous (not seeking follow-up)",
@@ -1279,8 +1310,13 @@ class ReferralForm(forms.Form):
         # org slug -> (submit field or None for always, anonymous field)
         "k12_legal_defense": ("submit_k12_legal", "anonymous_k12_legal"),
         "cair": ("submit_cair", "anonymous_cair"),
+        "palestine_legal": ("submit_pal_legal", "anonymous_pal_legal"),
         "aroc_iuapr": (None, "aroc_anonymous"),
     }
+
+    # Which organizations apply, by report state.
+    CA_ORG_SLUGS = {"k12_legal_defense", "cair", "aroc_iuapr"}
+    NON_CA_ORG_SLUGS = {"palestine_legal", "aroc_iuapr"}
 
     def __init__(self, *args, report=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1307,19 +1343,27 @@ class ReferralForm(forms.Form):
                     )
 
     def save(self, report):
+        # Only the organizations that apply to this report's state
+        # are written; POST keys for the other state's organizations
+        # are ignored.
+        allowed = (
+            self.CA_ORG_SLUGS
+            if report.state == "CA"
+            else self.NON_CA_ORG_SLUGS
+        )
+
         organizations = {
             organization.slug: organization
             for organization in ReferralOrganization.objects.filter(
-                slug__in=self.ORGANIZATION_FIELDS.keys(),
+                slug__in=allowed,
             )
         }
 
-        # Only this form's organizations: referral rows for other
-        # organizations (e.g. historical Palestine Legal rows) must
-        # survive a re-save.
+        # Only this save's organizations: referral rows for other
+        # organizations must survive a re-save.
         ReportReferral.objects.filter(
             report=report,
-            organization__slug__in=self.ORGANIZATION_FIELDS.keys(),
+            organization__slug__in=allowed,
         ).delete()
 
         referrals = []
@@ -1327,6 +1371,9 @@ class ReferralForm(forms.Form):
         for slug, (submit_field, anon_field) in (
             self.ORGANIZATION_FIELDS.items()
         ):
+            if slug not in allowed:
+                continue
+
             organization = organizations.get(slug)
 
             if organization is None:

@@ -41,13 +41,16 @@ class Command(BaseCommand):
 
                 (
                     "anti_muslim_hate",
-                    "Anti-Muslim Hate",
+                    "Anti-Muslim Hate or Islamophobia",
                     False,
                 ),
 
+                # Merged into anti_muslim_hate (2026-10-01 review).
+                # Row kept inactive for historical selections.
                 (
                     "racism_or_islamophobia",
                     "Racism or Islamophobia",
+                    False,
                     False,
                 ),
 
@@ -883,7 +886,15 @@ class Command(BaseCommand):
                 category_options,
                 start=1,
             ):
-                slug, label, allows_other_text = option_data
+                # 3-tuples are active; a 4th element deactivates an
+                # option while keeping its row for historical data.
+                if len(option_data) == 4:
+                    slug, label, allows_other_text, is_active = (
+                        option_data
+                    )
+                else:
+                    slug, label, allows_other_text = option_data
+                    is_active = True
 
                 obj, created = ReportOption.objects.update_or_create(
                     category=category,
@@ -892,7 +903,7 @@ class Command(BaseCommand):
                         "label": label,
                         "sort_order": sort_order * 10,
                         "allows_other_text": allows_other_text,
-                        "is_active": True,
+                        "is_active": is_active,
                     },
                 )
 
@@ -921,14 +932,17 @@ class Command(BaseCommand):
                 True,
             ),
 
-            # The 9.21 question lists three choices; PalLegal is
-            # named in the intro text only. Kept for data continuity
-            # on existing referrals, but not offered.
+            # Offered to reporters outside California (2026-10-01
+            # review): non-CA reports can opt in to Palestine Legal
+            # alongside the AROC/IUAPR default.
             (
                 "palestine_legal",
                 "Palestine Legal",
-                "",
-                False,
+                (
+                    "A trusted pro-Palestine organization "
+                    "that can pursue legal action."
+                ),
+                True,
             ),
 
             (

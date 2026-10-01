@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import transaction
 from django.shortcuts import (
     get_object_or_404,
@@ -207,16 +208,15 @@ def incident_report_create(request):
         # REFERRALS
         # ---------------------------------------------------------
 
-        referral_form = None
-        referral_valid = True
+        # Every state gets the organization consent block: CA offers
+        # K-12 Legal Defense and CAIR, other states Palestine Legal;
+        # save() writes only the organizations for the report's state.
+        referral_form = ReferralForm(
+            request.POST,
+            prefix="referral",
+        )
 
-        if state == "CA":
-            referral_form = ReferralForm(
-                request.POST,
-                prefix="referral",
-            )
-
-            referral_valid = referral_form.is_valid()
+        referral_valid = referral_form.is_valid()
 
         # ---------------------------------------------------------
         # CHECK EVERYTHING
@@ -526,6 +526,7 @@ def incident_report_create(request):
         "final_form": final_form,
         "referral_form": referral_form,
         "attachment_form": attachment_form,
+        "data_retention_doc_url": settings.DATA_RETENTION_DOC_URL,
     }
 
     return render(

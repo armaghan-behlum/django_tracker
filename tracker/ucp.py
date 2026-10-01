@@ -318,7 +318,10 @@ def known_answers(report):
 OPTION_TERMS = {
     # tracker option slug -> terms found in district checkbox keys/labels
     "anti_arab_racism": ["arab", "ancestry", "ethnic"],
-    "anti_muslim_hate": ["muslim", "religio", "islam"],
+    # "Anti-Muslim Hate or Islamophobia" (merged 2026-10-01): union
+    # of the old anti_muslim_hate and racism_or_islamophobia terms.
+    "anti_muslim_hate": ["muslim", "religio", "islam", "race", "racism"],
+    # Inactive since the merge; kept so historical selections map.
     "racism_or_islamophobia": ["race", "racism", "islam", "religio"],
     "anti_palestinian_racism": [
         "palestin", "national_origin", "national origin", "ancestry",
