@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load crispy_forms_tags %}
+{% load static %}
 
 {% block title %}
     Education Discrimination & Censorship Tracker
@@ -57,6 +58,19 @@
 </style>
 
 <div class="mb-4">
+    <div class="d-flex flex-wrap align-items-center gap-4 mb-3">
+        <img
+            src="{% static 'img/aroc-action.png' %}"
+            alt="AROC Action"
+            style="height: 72px; width: auto;"
+        >
+        <img
+            src="{% static 'img/iuapr.png' %}"
+            alt="The Institute for the Understanding of Anti-Palestinian Racism"
+            style="height: 44px; width: auto; max-width: 100%;"
+        >
+    </div>
+
     <h1 class="mb-1">
         AROC-Action &amp; IUAPR
     </h1>
