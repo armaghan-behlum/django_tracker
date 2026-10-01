@@ -1428,9 +1428,31 @@ document.addEventListener("DOMContentLoaded", function () {
             "id_school-grade",
             "id_school-location_within_school",
             "id_school-educational_requirement_violated",
+            // Formal complaint details: the section only shows once
+            // the reporter authorizes the district complaint, and
+            // all of these are doc-starred and required then.
+            "id_formal-complaint_against",
+            "id_formal-individuals_involved",
+            "id_formal-witnesses",
+            "id_formal-requested_remedy",
+            "id_formal-complainant_address",
         ].forEach(function (id) {
             setStar(id, true);
         });
+
+        // Radio group: the label is not tied to one input id.
+        const discussedGroup = document.querySelector(
+            "#div_id_formal-discussed_with_principal_or_supervisor > label"
+        );
+        if (
+            discussedGroup &&
+            !discussedGroup.querySelector(".asteriskField")
+        ) {
+            const span = document.createElement("span");
+            span.className = "asteriskField";
+            span.textContent = "*";
+            discussedGroup.appendChild(span);
+        }
 
         setStar("id_school-school_name", schoolLocation);
         setStar("id_school-school_type", schoolLocation);
