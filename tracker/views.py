@@ -21,6 +21,7 @@ from .forms import (
 )
 
 from .models import (
+    AffectedPerson,
     IncidentReport,
 )
 
@@ -91,11 +92,6 @@ def incident_report_create(request):
             prefix="contact",
         )
 
-        affected_person_form = AffectedPersonForm(
-            request.POST,
-            prefix="affected",
-        )
-
         incident_form = IncidentDetailsForm(
             request.POST,
             prefix="incident",
@@ -119,7 +115,6 @@ def incident_report_create(request):
 
         # Validate these once so we can safely inspect cleaned_data.
         contact_valid = contact_form.is_valid()
-        affected_person_valid = affected_person_form.is_valid()
         incident_valid = incident_form.is_valid()
         demographics_valid = demographics_form.is_valid()
         final_valid = final_form.is_valid()
@@ -224,7 +219,6 @@ def incident_report_create(request):
 
         all_valid = all([
             contact_valid,
-            affected_person_valid,
             incident_valid,
             demographics_valid,
             final_valid,
@@ -314,23 +308,17 @@ def incident_report_create(request):
                 # -------------------------------------------------
                 # AFFECTED PERSON
                 # -------------------------------------------------
+                # The form no longer asks who was affected (the CA
+                # parent question collects the child's name), but
+                # demographics still hang off an AffectedPerson row,
+                # so create the default reporter-is-affected record.
 
-                affected_person = (
-                    affected_person_form.save(
-                        commit=False
-                    )
+                affected_person = AffectedPerson(
+                    report=report,
+                    is_reporter=True,
+                    first_name=report.first_name,
+                    last_name=report.last_name,
                 )
-
-                affected_person.report = report
-
-                if affected_person.is_reporter:
-                    affected_person.first_name = (
-                        report.first_name
-                    )
-
-                    affected_person.last_name = (
-                        report.last_name
-                    )
 
                 affected_person.full_clean()
                 affected_person.save()
@@ -473,10 +461,6 @@ def incident_report_create(request):
             prefix="contact",
         )
 
-        affected_person_form = AffectedPersonForm(
-            prefix="affected",
-        )
-
         incident_form = IncidentDetailsForm(
             prefix="incident",
         )
@@ -517,7 +501,6 @@ def incident_report_create(request):
 
     context = {
         "contact_form": contact_form,
-        "affected_person_form": affected_person_form,
         "incident_form": incident_form,
         "california_form": california_form,
         "school_form": school_form,
