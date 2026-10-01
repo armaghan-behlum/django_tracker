@@ -1338,7 +1338,9 @@ class ReferralForm(forms.Form):
     }
 
     # Which organizations apply, by report state.
-    CA_ORG_SLUGS = {"k12_legal_defense", "cair", "aroc_iuapr"}
+    CA_ORG_SLUGS = {
+        "k12_legal_defense", "cair", "palestine_legal", "aroc_iuapr",
+    }
     NON_CA_ORG_SLUGS = {"palestine_legal", "aroc_iuapr"}
 
     def __init__(self, *args, report=None, **kwargs):

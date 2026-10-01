@@ -473,19 +473,14 @@
             </div>
         </div>
 
-        <div
-            class="conditional-section"
-            id="referral-nonca-orgs"
-        >
-            <div class="org-choice">
-                {{ referral_form.submit_pal_legal|as_crispy_field }}
+        <div class="org-choice">
+            {{ referral_form.submit_pal_legal|as_crispy_field }}
 
-                <div
-                    class="org-anonymous conditional-section"
-                    id="pal-legal-anonymous"
-                >
-                    {{ referral_form.anonymous_pal_legal|as_crispy_field }}
-                </div>
+            <div
+                class="org-anonymous conditional-section"
+                id="pal-legal-anonymous"
+            >
+                {{ referral_form.anonymous_pal_legal|as_crispy_field }}
             </div>
         </div>
 
@@ -517,8 +512,8 @@
         </div>
 
         <p class="mt-3 mb-0">
-            For online hate or repression, we recommend filling out
-            an incident report with 7amleh:
+            For online hate or repression, we recommend also filling
+            out an incident report with 7amleh:
             <a
                 href="https://7or.7amleh.org/"
                 target="_blank"
@@ -1387,11 +1382,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
         setVisible(
             "referral-nonca-intro",
-            hasState && !isCalifornia
-        );
-
-        setVisible(
-            "referral-nonca-orgs",
             hasState && !isCalifornia
         );
 
