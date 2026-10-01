@@ -163,6 +163,8 @@ class IncidentContactForm(forms.ModelForm):
         }
 
         help_texts = {
+            # The label already carries the full consent statement.
+            "has_consented": "",
             "email": (
                 "As a reminder, this form is end to end encrypted "
                 "and you may opt out of any contact."
