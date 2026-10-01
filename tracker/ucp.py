@@ -280,14 +280,17 @@ def known_answers(report):
         })
 
     # Discrimination basis as free text, from the selected options.
-    basis_labels = list(
-        report.option_selections.filter(
+    # A selection's free-text detail ("Other: Anti-Black racism")
+    # carries the reporter's actual claim, so it joins the label.
+    basis_labels = [
+        f"{label}: {other}" if other else label
+        for label, other in report.option_selections.filter(
             option__category__in=[
                 "racism_type",
                 "targeted_identity",
             ],
-        ).values_list("option__label", flat=True)
-    )
+        ).values_list("option__label", "other_text")
+    ]
 
     # The direct questionnaire answer is stored on the report itself,
     # not as an option selection; without this an explicit "yes" would
@@ -320,7 +323,10 @@ OPTION_TERMS = {
     "anti_arab_racism": ["arab", "ancestry", "ethnic"],
     # "Anti-Muslim Hate or Islamophobia" (merged 2026-10-01): union
     # of the old anti_muslim_hate and racism_or_islamophobia terms.
-    "anti_muslim_hate": ["muslim", "religio", "islam", "race", "racism"],
+    # Not "race"/"racism": historical anti_muslim_hate selections
+    # predate the merge with "Racism or Islamophobia" and must not
+    # pre-check Race on district forms their reporter never claimed.
+    "anti_muslim_hate": ["muslim", "religio", "islam"],
     # Inactive since the merge; kept so historical selections map.
     "racism_or_islamophobia": ["race", "racism", "islam", "religio"],
     "anti_palestinian_racism": [

@@ -4,6 +4,29 @@ from django.forms import ClearableFileInput
 
 from hcaptcha.fields import hCaptchaField
 
+
+class SafeHCaptchaField(hCaptchaField):
+    """
+    The upstream field only catches HTTPError during verification; a
+    connection failure, timeout, or malformed response escapes and
+    turns the whole submission into a server error, destroying the
+    reporter's entries. Turn those into a field error instead so the
+    form re-renders populated and can be retried.
+    """
+
+    def validate(self, value):
+        try:
+            super().validate(value)
+        except forms.ValidationError:
+            raise
+        except Exception as exc:
+            raise forms.ValidationError(
+                "We could not reach the verification service. "
+                "Your answers are still here — please try "
+                "submitting again in a moment.",
+                code="error_hcaptcha",
+            ) from exc
+
 from .models import (
     IncidentReport,
     AffectedPerson,
@@ -1134,7 +1157,7 @@ class FinalQuestionsForm(forms.ModelForm):
         # Human verification, only when keys are configured so local
         # development without hCaptcha keys keeps working.
         if settings.HCAPTCHA_SITEKEY:
-            self.fields["captcha"] = hCaptchaField(
+            self.fields["captcha"] = SafeHCaptchaField(
                 label="Verify you are human",
             )
 
