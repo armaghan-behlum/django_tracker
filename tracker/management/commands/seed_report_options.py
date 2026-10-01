@@ -918,24 +918,31 @@ class Command(BaseCommand):
                     "A trusted pro-Palestine organization "
                     "that can pursue legal action."
                 ),
+                True,
             ),
 
+            # The 9.21 question lists three choices; PalLegal is
+            # named in the intro text only. Kept for data continuity
+            # on existing referrals, but not offered.
             (
                 "palestine_legal",
                 "Palestine Legal",
                 "",
+                False,
             ),
 
             (
                 "cair",
                 "Local CAIR Chapter",
                 "",
+                True,
             ),
 
             (
                 "aroc_iuapr",
                 "AROC / IUAPR",
                 "",
+                True,
             ),
         ]
 
@@ -946,6 +953,7 @@ class Command(BaseCommand):
             slug,
             name,
             description,
+            is_active,
         ) in enumerate(
             organizations,
             start=1,
@@ -958,7 +966,7 @@ class Command(BaseCommand):
                         "name": name,
                         "description": description,
                         "sort_order": sort_order * 10,
-                        "is_active": True,
+                        "is_active": is_active,
                     },
                 )
             )
