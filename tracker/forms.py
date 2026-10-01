@@ -85,16 +85,23 @@ def initial_option_ids(report, category):
     )
 
 
-def save_option_selections(report, category, options):
+def save_option_selections(report, category, options, other_text=""):
     ReportOptionSelection.objects.filter(
         report=report,
         option__category=category,
     ).delete()
 
+    # other_text lands only on the option that allows it (the
+    # category's "Other" choice), never on fixed options.
     ReportOptionSelection.objects.bulk_create([
         ReportOptionSelection(
             report=report,
             option=option,
+            other_text=(
+                other_text.strip()
+                if option.allows_other_text
+                else ""
+            ),
         )
         for option in options
     ])
@@ -272,6 +279,24 @@ class IncidentDetailsForm(forms.ModelForm):
         required=False,
         widget=forms.CheckboxSelectMultiple,
         label="",
+    )
+
+    racism_types_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
+    )
+
+    location_types_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
+    )
+
+    incident_types_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
     )
 
     class Meta:
@@ -456,18 +481,21 @@ class IncidentDetailsForm(forms.ModelForm):
             report,
             ReportOption.Category.RACISM_TYPE,
             self.cleaned_data["racism_types"],
+            self.cleaned_data.get("racism_types_other", ""),
         )
 
         save_option_selections(
             report,
             ReportOption.Category.LOCATION_TYPE,
             self.cleaned_data["location_types"],
+            self.cleaned_data.get("location_types_other", ""),
         )
 
         save_option_selections(
             report,
             ReportOption.Category.INCIDENT_TYPE,
             self.cleaned_data["incident_types"],
+            self.cleaned_data.get("incident_types_other", ""),
         )
 
 
@@ -590,6 +618,12 @@ class SchoolIncidentForm(forms.ModelForm):
             "If you did not report this incident before, can you "
             "indicate your reason? Select any that apply."
         ),
+    )
+
+    nonreport_reasons_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
     )
 
     class Meta:
@@ -770,6 +804,7 @@ class SchoolIncidentForm(forms.ModelForm):
             report,
             ReportOption.Category.NONREPORT_REASON,
             self.cleaned_data["nonreport_reasons"],
+            self.cleaned_data.get("nonreport_reasons_other", ""),
         )
 
 
@@ -958,6 +993,24 @@ class DemographicsImpactForm(forms.ModelForm):
         label="",
     )
 
+    targeted_identities_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
+    )
+
+    discrimination_experiences_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
+    )
+
+    wellbeing_impacts_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
+    )
+
     class Meta:
         model = AffectedPersonDemographics
 
@@ -1059,6 +1112,10 @@ class DemographicsImpactForm(forms.ModelForm):
                 report,
                 category,
                 self.cleaned_data[field_name],
+                self.cleaned_data.get(
+                    f"{field_name}_other",
+                    "",
+                ),
             )
 
 
@@ -1257,8 +1314,12 @@ class ReferralForm(forms.Form):
             )
         }
 
+        # Only this form's organizations: referral rows for other
+        # organizations (e.g. historical Palestine Legal rows) must
+        # survive a re-save.
         ReportReferral.objects.filter(
-            report=report
+            report=report,
+            organization__slug__in=self.ORGANIZATION_FIELDS.keys(),
         ).delete()
 
         referrals = []
@@ -1293,6 +1354,19 @@ class ReferralForm(forms.Form):
             )
 
         ReportReferral.objects.bulk_create(referrals)
+
+        # The questionnaire defines "Make anonymous (not seeking
+        # follow-up)" on AROC/IUAPR as opting out of follow-up, so
+        # keep the report flag in step. Never cleared here: the
+        # reporter's explicit opt-out elsewhere must stand.
+        if (
+            self.cleaned_data.get("aroc_anonymous")
+            and not report.opt_out_of_followup
+        ):
+            report.opt_out_of_followup = True
+            report.save(
+                update_fields=["opt_out_of_followup"]
+            )
 
 
 # ---------------------------------------------------------------------

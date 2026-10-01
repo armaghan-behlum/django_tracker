@@ -413,7 +413,7 @@
 
         <h2>5. About the incident</h2>
 
-        <h3>
+        <h3 id="racism-types-heading">
             Did the incident involve any of these forms of racism?
         </h3>
 
@@ -421,33 +421,68 @@
             Select all that apply.
         </p>
 
-        <div class="option-grid">
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="racism-types-heading"
+        >
             {{ incident_form.racism_types|as_crispy_field }}
         </div>
 
-        <hr>
-
-        <h3>What kind of location did the incident take place at?</h3>
-
-        <p class="text-muted">
-            You may select multiple options. If Other, type it in
-            the box.
-        </p>
-
-        <div class="option-grid">
-            {{ incident_form.location_types|as_crispy_field }}
+        <div
+            id="racism-types-other"
+            class="conditional-section"
+        >
+            {{ incident_form.racism_types_other|as_crispy_field }}
         </div>
 
         <hr>
 
-        <h3>What type of incident was it?</h3>
+        <h3 id="location-types-heading">
+            What kind of location did the incident take place at?
+        </h3>
+
+        <p class="text-muted">
+            You may select multiple options. If Other, please
+            specify in the box that appears.
+        </p>
+
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="location-types-heading"
+        >
+            {{ incident_form.location_types|as_crispy_field }}
+        </div>
+
+        <div
+            id="location-types-other"
+            class="conditional-section"
+        >
+            {{ incident_form.location_types_other|as_crispy_field }}
+        </div>
+
+        <hr>
+
+        <h3 id="incident-types-heading">What type of incident was it?</h3>
 
         <p class="text-muted">
             Select all that apply.
         </p>
 
-        <div class="option-grid">
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="incident-types-heading"
+        >
             {{ incident_form.incident_types|as_crispy_field }}
+        </div>
+
+        <div
+            id="incident-types-other"
+            class="conditional-section"
+        >
+            {{ incident_form.incident_types_other|as_crispy_field }}
         </div>
 
         <hr>
@@ -651,7 +686,7 @@
         <hr>
 
 
-        <h3>
+        <h3 id="educational-impacts-heading">
             Educational impacts: What were the impacts of this
             incident on your experience in school?
         </h3>
@@ -660,7 +695,11 @@
             Select all that apply.
         </p>
 
-        <div class="option-grid">
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="educational-impacts-heading"
+        >
             {{ school_form.educational_impacts|as_crispy_field }}
         </div>
 
@@ -686,6 +725,13 @@
             class="conditional-section option-grid"
         >
             {{ school_form.nonreport_reasons|as_crispy_field }}
+        </div>
+
+        <div
+            id="nonreport-reasons-other"
+            class="conditional-section"
+        >
+            {{ school_form.nonreport_reasons_other|as_crispy_field }}
         </div>
 
         {{ incident_form.resolution_steps|as_crispy_field }}
@@ -742,7 +788,7 @@
 
         <h2>9. Experiences and impacts</h2>
 
-        <h3>
+        <h3 id="discrimination-experiences-heading">
             In this or other instances, did you experience any of
             the following?
         </h3>
@@ -754,13 +800,24 @@
             rights. Select all that apply.
         </p>
 
-        <div class="option-grid">
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="discrimination-experiences-heading"
+        >
             {{ demographics_form.discrimination_experiences|as_crispy_field }}
+        </div>
+
+        <div
+            id="discrimination-experiences-other"
+            class="conditional-section"
+        >
+            {{ demographics_form.discrimination_experiences_other|as_crispy_field }}
         </div>
 
         <hr>
 
-        <h3>
+        <h3 id="wellbeing-impacts-heading">
             Regarding your personal well-being and health, what
             impacts did you experience as a result of this incident?
         </h3>
@@ -770,8 +827,19 @@
             self-doubt, etc. Select all that apply.
         </p>
 
-        <div class="option-grid">
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="wellbeing-impacts-heading"
+        >
             {{ demographics_form.wellbeing_impacts|as_crispy_field }}
+        </div>
+
+        <div
+            id="wellbeing-impacts-other"
+            class="conditional-section"
+        >
+            {{ demographics_form.wellbeing_impacts_other|as_crispy_field }}
         </div>
 
         <hr>
@@ -795,7 +863,7 @@
             experienced the incident.
         </p>
 
-        <h3>
+        <h3 id="targeted-identities-heading">
             If any, what aspects of your identity do you believe may
             have been targeted in this incident?
         </h3>
@@ -804,22 +872,37 @@
             Select all that apply.
         </p>
 
-        <div class="option-grid">
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="targeted-identities-heading"
+        >
             {{ demographics_form.targeted_identities|as_crispy_field }}
+        </div>
+
+        <div
+            id="targeted-identities-other"
+            class="conditional-section"
+        >
+            {{ demographics_form.targeted_identities_other|as_crispy_field }}
         </div>
 
 
         <hr>
 
 
-        <h3>What is your race and/or ethnicity?</h3>
+        <h3 id="race-ethnicity-heading">What is your race and/or ethnicity?</h3>
 
         <p class="text-muted">
             Choose up to three representing the ones you most
             identify with.
         </p>
 
-        <div class="option-grid">
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="race-ethnicity-heading"
+        >
             {{ demographics_form.race_ethnicity|as_crispy_field }}
         </div>
 
@@ -828,13 +911,18 @@
             id="arab-palestinian-section"
             class="conditional-section mt-4"
         >
-            <h3>Do you identify as Arab or Palestinian?</h3>
+            <h3 id="arab-palestinian-heading">Do you identify as Arab or Palestinian?</h3>
 
             <p class="text-muted">
                 Check all that apply.
             </p>
 
-            {{ demographics_form.arab_palestinian_identity|as_crispy_field }}
+            <div
+                role="group"
+                aria-labelledby="arab-palestinian-heading"
+            >
+                {{ demographics_form.arab_palestinian_identity|as_crispy_field }}
+            </div>
         </div>
 
 
@@ -1367,6 +1455,77 @@ document.addEventListener("DOMContentLoaded", function () {
      * ----------------------------------------------------------
      */
 
+    function checkboxWithLabelIs(name, text) {
+        const inputs = document.querySelectorAll(
+            `input[name="${name}"]`
+        );
+
+        text = text.toLowerCase();
+
+        for (const input of inputs) {
+
+            if (!input.checked) {
+                continue;
+            }
+
+            const label = document.querySelector(
+                `label[for="${input.id}"]`
+            );
+
+            if (
+                label &&
+                label.textContent.trim().toLowerCase() === text
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * "OTHER" FREE-TEXT BOXES
+     * ----------------------------------------------------------
+     *
+     * Each pair is [checkbox group name, section id]. The box
+     * shows only while that group's "Other" option is checked.
+     * Exact label match: some options merely contain the word
+     * "other" ("Worsening of other health conditions").
+     */
+
+    const OTHER_TEXT_SECTIONS = [
+        ["incident-racism_types", "racism-types-other"],
+        ["incident-location_types", "location-types-other"],
+        ["incident-incident_types", "incident-types-other"],
+        ["school-nonreport_reasons", "nonreport-reasons-other"],
+        [
+            "demographics-targeted_identities",
+            "targeted-identities-other"
+        ],
+        [
+            "demographics-discrimination_experiences",
+            "discrimination-experiences-other"
+        ],
+        [
+            "demographics-wellbeing_impacts",
+            "wellbeing-impacts-other"
+        ],
+    ];
+
+
+    function updateOtherTexts() {
+
+        for (const [name, id] of OTHER_TEXT_SECTIONS) {
+            setVisible(
+                id,
+                checkboxWithLabelIs(name, "other")
+            );
+        }
+    }
+
+
     function updateAbsenceFrequency() {
 
         // The 9.21 questionnaire keys this on "avoid school";
@@ -1424,6 +1583,8 @@ document.addEventListener("DOMContentLoaded", function () {
         updateArabPalestinian();
 
         updateAbsenceFrequency();
+
+        updateOtherTexts();
 
         updateReferrals();
     }

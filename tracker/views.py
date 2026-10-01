@@ -429,6 +429,40 @@ def incident_report_create(request):
                 uuid=report.uuid,
             )
 
+        # ---------------------------------------------------------
+        # INVALID: GUARD THE RE-RENDER
+        # ---------------------------------------------------------
+        # Conditional forms stay None when their gate (state,
+        # K-12 answer, ...) could not be evaluated, but the template
+        # renders them unconditionally. Bind them to the POST so the
+        # error page renders and the reporter's entries survive.
+
+        if california_form is None:
+            california_form = CaliforniaDetailsForm(
+                request.POST,
+                prefix="california",
+            )
+
+        if school_form is None:
+            school_form = SchoolIncidentForm(
+                request.POST,
+                prefix="school",
+            )
+
+        if formal_complaint_form is None:
+            formal_complaint_form = (
+                FormalSchoolComplaintForm(
+                    request.POST,
+                    prefix="formal",
+                )
+            )
+
+        if referral_form is None:
+            referral_form = ReferralForm(
+                request.POST,
+                prefix="referral",
+            )
+
     else:
 
         # ---------------------------------------------------------
