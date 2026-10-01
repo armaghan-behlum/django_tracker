@@ -94,9 +94,20 @@ def incident_report_create(request):
             prefix="contact",
         )
 
+        # Validate contact first: the state answer decides which
+        # later questions are required.
+        contact_valid = contact_form.is_valid()
+
+        state = (
+            contact_form.cleaned_data.get("state")
+            if contact_valid
+            else None
+        )
+
         incident_form = IncidentDetailsForm(
             request.POST,
             prefix="incident",
+            state=state,
         )
 
         demographics_form = DemographicsImpactForm(
@@ -116,20 +127,22 @@ def incident_report_create(request):
         )
 
         # Validate these once so we can safely inspect cleaned_data.
-        contact_valid = contact_form.is_valid()
         incident_valid = incident_form.is_valid()
         demographics_valid = demographics_form.is_valid()
         final_valid = final_form.is_valid()
         attachment_valid = attachment_form.is_valid()
 
-        # ---------------------------------------------------------
-        # DETERMINE STATE
-        # ---------------------------------------------------------
+        # Path signals for conditional requirements. The raw
+        # authorization answer is only a gating hint; the formal
+        # form itself validates it properly.
+        school_location = (
+            incident_valid
+            and location_includes_school(incident_form)
+        )
 
-        state = (
-            contact_form.cleaned_data.get("state")
-            if contact_valid
-            else None
+        authorize = (
+            request.POST.get("formal-authorize_autopopulation")
+            == "True"
         )
 
         # ---------------------------------------------------------
@@ -143,9 +156,23 @@ def incident_report_create(request):
             california_form = CaliforniaDetailsForm(
                 request.POST,
                 prefix="california",
+                school_location=school_location,
             )
 
             california_valid = california_form.is_valid()
+
+        is_ca_k12 = False
+
+        if (
+            state == "CA"
+            and california_form
+            and california_valid
+        ):
+            is_ca_k12 = bool(
+                california_form.cleaned_data.get(
+                    "is_k12_incident"
+                )
+            )
 
         # ---------------------------------------------------------
         # SCHOOL FORM
@@ -167,6 +194,9 @@ def incident_report_create(request):
             school_form = SchoolIncidentForm(
                 request.POST,
                 prefix="school",
+                school_location=school_location,
+                ca_k12=is_ca_k12,
+                authorize=authorize,
             )
 
             school_valid = school_form.is_valid()
@@ -177,19 +207,6 @@ def incident_report_create(request):
 
         formal_complaint_form = None
         formal_valid = True
-
-        is_ca_k12 = False
-
-        if (
-            state == "CA"
-            and california_form
-            and california_valid
-        ):
-            is_ca_k12 = bool(
-                california_form.cleaned_data.get(
-                    "is_k12_incident"
-                )
-            )
 
         if is_ca_k12:
             formal_complaint_form = FormalSchoolComplaintForm(
@@ -467,6 +484,27 @@ def incident_report_create(request):
             )
 
         # ---------------------------------------------------------
+        # ERROR SUMMARY
+        # ---------------------------------------------------------
+        # Collected BEFORE the fallback binding below: a fallback
+        # form exists only so the re-render survives, and its
+        # "errors" are for sections that never applied to this path.
+
+        for form, section in [
+            (contact_form, "Consent and contact information"),
+            (referral_form, "Where should we report this incident"),
+            (incident_form, "Incident details"),
+            (california_form, "California K-12"),
+            (school_form, "School information"),
+            (formal_complaint_form, "California K-12 complaint"),
+            (demographics_form, "Experiences, impacts and identity"),
+            (final_form, "Signature and final questions"),
+            (attachment_form, "Supporting materials"),
+        ]:
+            if form is not None and form.is_bound and form.errors:
+                error_sections.append(section)
+
+        # ---------------------------------------------------------
         # INVALID: GUARD THE RE-RENDER
         # ---------------------------------------------------------
         # Conditional forms stay None when their gate (state,
@@ -499,26 +537,6 @@ def incident_report_create(request):
                 request.POST,
                 prefix="referral",
             )
-
-        # ---------------------------------------------------------
-        # ERROR SUMMARY
-        # ---------------------------------------------------------
-        # Name the parts of the form that need attention; the page
-        # scrolls to the first invalid field on load.
-
-        for form, section in [
-            (contact_form, "Consent and contact information"),
-            (referral_form, "Where should we report this incident"),
-            (incident_form, "Incident details"),
-            (california_form, "California K-12"),
-            (school_form, "School information"),
-            (formal_complaint_form, "California K-12 complaint"),
-            (demographics_form, "Experiences, impacts and identity"),
-            (final_form, "Signature and final questions"),
-            (attachment_form, "Supporting materials"),
-        ]:
-            if form.is_bound and form.errors:
-                error_sections.append(section)
 
     else:
 

@@ -422,15 +422,9 @@
 
         {{ incident_form.description|as_crispy_field }}
 
-        <div class="row">
-            <div class="col-md-8">
-                {{ incident_form.city|as_crispy_field }}
-            </div>
+        {{ incident_form.city|as_crispy_field }}
 
-            <div class="col-md-4">
-                {{ incident_form.zip_code|as_crispy_field }}
-            </div>
-        </div>
+        {{ incident_form.zip_code|as_crispy_field }}
 
     </section>
 
@@ -444,7 +438,7 @@
         <h2>About the racism involved</h2>
 
         <h3 id="racism-types-heading">
-            Did the incident involve any of these forms of racism?
+            Did the incident involve any of these forms of racism?*
         </h3>
 
         <p class="text-muted">
@@ -568,7 +562,7 @@
         <h2>Where it happened</h2>
 
         <h3 id="location-types-heading">
-            What kind of location did the incident take place at?
+            What kind of location did the incident take place at?*
         </h3>
 
         <p class="text-muted">
@@ -693,7 +687,7 @@
 
         <h2>Type of incident</h2>
 
-        <h3 id="incident-types-heading">What type of incident was it?</h3>
+        <h3 id="incident-types-heading">What type of incident was it?*</h3>
 
         <p class="text-muted">
             Select all that apply.
@@ -978,7 +972,7 @@
 
         <h3 id="targeted-identities-heading">
             If any, what aspects of your identity do you believe may
-            have been targeted in this incident?
+            have been targeted in this incident?*
         </h3>
 
         <p class="text-muted">
@@ -1017,7 +1011,7 @@
         <hr>
 
 
-        <h3 id="race-ethnicity-heading">What is your race and/or ethnicity?</h3>
+        <h3 id="race-ethnicity-heading">What is your race and/or ethnicity?*</h3>
 
         <p class="text-muted">
             Choose up to three representing the ones you most
@@ -1037,7 +1031,7 @@
             id="arab-palestinian-section"
             class="conditional-section mt-4"
         >
-            <h3 id="arab-palestinian-heading">Do you identify as Arab or Palestinian?</h3>
+            <h3 id="arab-palestinian-heading">Do you identify as Arab or Palestinian?*</h3>
 
             <p class="text-muted">
                 Check all that apply.
@@ -1388,6 +1382,75 @@ document.addEventListener("DOMContentLoaded", function () {
      * ----------------------------------------------------------
      */
 
+    /*
+     * Required-mark helper: crispy adds the asterisk server-side
+     * when a field is required on a bound form; these keep the
+     * label honest live as the path changes.
+     */
+
+    function setStar(inputId, on) {
+        const label = document.querySelector(
+            'label[for="' + inputId + '"]'
+        );
+
+        if (!label) {
+            return;
+        }
+
+        const existing = label.querySelector(".asteriskField");
+        const hasTextStar = label.textContent.trim().endsWith("*");
+
+        if (on && !existing && !hasTextStar) {
+            const span = document.createElement("span");
+            span.className = "asteriskField";
+            span.textContent = "*";
+            label.appendChild(span);
+        }
+
+        if (!on && existing) {
+            existing.remove();
+        }
+    }
+
+
+    function updateRequiredMarks() {
+
+        const state = value("id_contact-state");
+        const isCalifornia = state === "CA";
+
+        const isK12 = checkedValue(
+            "california-is_k12_incident"
+        ) === "True";
+
+        const schoolLocation = checkboxWithLabelContains(
+            "incident-location_types",
+            "school"
+        );
+
+        // Only required (and only visible) on their own paths;
+        // star whenever shown.
+        [
+            "id_california-reporter_role",
+            "id_california-reporter_role_other",
+            "id_california-student_date_of_birth",
+            "id_california-child_full_name",
+            "id_school-grade",
+            "id_school-principal",
+            "id_school-location_within_school",
+            "id_school-educational_requirement_violated",
+        ].forEach(function (id) {
+            setStar(id, true);
+        });
+
+        setStar("id_school-school_name", schoolLocation);
+        setStar("id_school-school_type", schoolLocation);
+        setStar(
+            "id_school-school_district",
+            isCalifornia && isK12
+        );
+    }
+
+
     function updatePhoneRequired() {
 
         const state = value("id_contact-state");
@@ -1415,16 +1478,13 @@ document.addEventListener("DOMContentLoaded", function () {
         );
 
         if (cityLabel) {
-            const star = cityLabel.textContent.includes("*")
-                ? "*"
-                : "";
-
+            // City is doc-starred for California only.
             cityLabel.textContent = (
                 state === "CA"
                     ? "In what California city did the incident " +
-                      "take place?"
+                      "take place?*"
                     : "In what city did the incident take place?"
-            ) + star;
+            );
         }
     }
 
@@ -1793,6 +1853,8 @@ document.addEventListener("DOMContentLoaded", function () {
         updateCalifornia();
 
         updatePhoneRequired();
+
+        updateRequiredMarks();
 
         updateReporterRole();
 

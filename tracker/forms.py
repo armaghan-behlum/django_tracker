@@ -98,6 +98,25 @@ def option_queryset(category):
     )
 
 
+def length_ordered(queryset):
+    """
+    Display order for ragged checkbox grids: shortest label first so
+    items of similar height share a grid row; "Other..." stays last.
+    Seed sort_order is untouched — this is presentation only.
+    """
+    from django.db.models import Case, IntegerField, Value, When
+    from django.db.models.functions import Length
+
+    return queryset.annotate(
+        _other=Case(
+            When(slug__icontains="other", then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        ),
+        _len=Length("label"),
+    ).order_by("_other", "_len", "label")
+
+
 def initial_option_ids(report, category):
     if not report or not report.pk:
         return []
@@ -438,7 +457,7 @@ class IncidentDetailsForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, report=None, **kwargs):
+    def __init__(self, *args, report=None, state=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.report = report or (
@@ -447,16 +466,46 @@ class IncidentDetailsForm(forms.ModelForm):
             else None
         )
 
+        self.state = state
+
+        # Doc-starred questions are genuinely required.
+        for name, message in {
+            "zip_code": (
+                "Please provide the zip code where the incident "
+                "took place."
+            ),
+            "anti_palestinian_racism": (
+                "Please answer the anti-Palestinian racism question."
+            ),
+            "knows_of_other_apr_incidents": (
+                "Please answer yes or no."
+            ),
+            "similar_incidents": (
+                "Please tell us whether similar incidents occurred "
+                "before."
+            ),
+        }.items():
+            self.fields[name].required = True
+            self.fields[name].error_messages["required"] = message
+
+        # The doc stars the city question for California.
+        if state == "CA":
+            self.fields["city"].required = True
+            self.fields["city"].error_messages["required"] = (
+                "Please provide the California city where the "
+                "incident took place."
+            )
+
         self.fields["racism_types"].queryset = option_queryset(
             ReportOption.Category.RACISM_TYPE
         )
 
-        self.fields["location_types"].queryset = option_queryset(
-            ReportOption.Category.LOCATION_TYPE
+        self.fields["location_types"].queryset = length_ordered(
+            option_queryset(ReportOption.Category.LOCATION_TYPE)
         )
 
-        self.fields["incident_types"].queryset = option_queryset(
-            ReportOption.Category.INCIDENT_TYPE
+        self.fields["incident_types"].queryset = length_ordered(
+            option_queryset(ReportOption.Category.INCIDENT_TYPE)
         )
 
         if self.report:
@@ -477,6 +526,37 @@ class IncidentDetailsForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+
+        # The three option questions are doc-starred: at least one
+        # selection each (every list carries an "Other" option).
+        for name, message in {
+            "racism_types": (
+                "Please select at least one form of racism, or "
+                "choose Other and describe it."
+            ),
+            "location_types": (
+                "Please select at least one location, or choose "
+                "Other and describe it."
+            ),
+            "incident_types": (
+                "Please select at least one incident type, or "
+                "choose Other and describe it."
+            ),
+        }.items():
+            if name not in self.errors and not cleaned_data.get(name):
+                self.add_error(name, message)
+
+        # NullBooleanField ignores required=True (its validate is a
+        # no-op), so the yes/no radio is enforced here.
+        if (
+            "knows_of_other_apr_incidents" not in self.errors
+            and cleaned_data.get("knows_of_other_apr_incidents")
+            is None
+        ):
+            self.add_error(
+                "knows_of_other_apr_incidents",
+                "Please answer yes or no.",
+            )
 
         precision = cleaned_data.get("date_precision")
 
@@ -594,8 +674,42 @@ class CaliforniaDetailsForm(forms.ModelForm):
             ),
         }
 
+    def __init__(self, *args, school_location=False, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.school_location = school_location
+
+        # Doc-starred for California reports.
+        self.fields["is_k12_incident"].required = True
+        self.fields["is_k12_incident"].error_messages["required"] = (
+            "Please answer yes or no."
+        )
+
+        self.fields["age"].required = True
+        self.fields["age"].error_messages["required"] = (
+            "Please provide the age of the person affected."
+        )
+
+        # "Are you a:" renders in the School information block, so
+        # it is only answerable (and required) for school incidents.
+        if school_location:
+            self.fields["reporter_role"].required = True
+            self.fields["reporter_role"].error_messages[
+                "required"
+            ] = "Please tell us your role."
+
     def clean(self):
         cleaned_data = super().clean()
+
+        # NullBooleanField ignores required=True; enforce the radio.
+        if (
+            "is_k12_incident" not in self.errors
+            and cleaned_data.get("is_k12_incident") is None
+        ):
+            self.add_error(
+                "is_k12_incident",
+                "Please answer yes or no.",
+            )
 
         role = cleaned_data.get("reporter_role")
 
@@ -795,10 +909,55 @@ class SchoolIncidentForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, report=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        report=None,
+        school_location=False,
+        ca_k12=False,
+        authorize=False,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
 
         self.report = report
+        self.school_location = school_location
+        self.ca_k12 = ca_k12
+        self.authorize = authorize
+
+        # Doc-starred, gated on the path that reveals each field so
+        # a hidden field can never block submission.
+        required = {}
+
+        if school_location:
+            required.update({
+                "school_name": "Please provide the school's name.",
+                "school_type": "Please select the school type.",
+                "educational_requirement_violated": (
+                    "Please answer; if none applies, write \"none\"."
+                ),
+            })
+
+        if ca_k12:
+            required["school_district"] = (
+                "Please provide the school district."
+            )
+
+        if school_location and authorize:
+            required.update({
+                "grade": (
+                    "Please provide the grade; if not applicable, "
+                    "write n/a."
+                ),
+                "principal": "Please provide the principal's name.",
+                "location_within_school": (
+                    "Please tell us where in the school it happened."
+                ),
+            })
+
+        for name, message in required.items():
+            self.fields[name].required = True
+            self.fields[name].error_messages["required"] = message
 
         self.fields["educational_impacts"].queryset = option_queryset(
             ReportOption.Category.EDUCATIONAL_IMPACT
@@ -967,15 +1126,50 @@ class FormalSchoolComplaintForm(forms.ModelForm):
         "complainant_address",
     ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # This form only exists on the CA K-12 path, where the doc
+        # stars both yes/no questions.
+        self.fields["previously_submitted_to_district"].required = True
+        self.fields["previously_submitted_to_district"].error_messages[
+            "required"
+        ] = "Please answer yes or no."
+
+        self.fields["authorize_autopopulation"].required = True
+        self.fields["authorize_autopopulation"].error_messages[
+            "required"
+        ] = "Please answer yes or no."
+
     def clean(self):
         cleaned_data = super().clean()
 
         authorize = cleaned_data.get("authorize_autopopulation")
 
+        # NullBooleanField ignores required=True; enforce both
+        # yes/no radios here.
+        for radio in (
+            "previously_submitted_to_district",
+            "authorize_autopopulation",
+        ):
+            if (
+                radio not in self.errors
+                and cleaned_data.get(radio) is None
+            ):
+                self.add_error(radio, "Please answer yes or no.")
+
         if authorize:
             required = {
                 "complaint_against":
                     "Please identify who the complaint is against.",
+                "individuals_involved":
+                    "Please list the individuals involved.",
+                "witnesses": (
+                    "Please list any witnesses; if none, write "
+                    "\"none\"."
+                ),
+                "discussed_with_principal_or_supervisor":
+                    "Please answer yes or no.",
                 "requested_remedy":
                     "Please describe the action you would like taken.",
                 "complainant_address":
@@ -983,7 +1177,9 @@ class FormalSchoolComplaintForm(forms.ModelForm):
             }
 
             for field, message in required.items():
-                if not cleaned_data.get(field):
+                # "No" (False) is a real answer; only missing/blank
+                # values count as unanswered.
+                if cleaned_data.get(field) in (None, ""):
                     self.add_error(
                         field,
                         message,
@@ -1106,6 +1302,16 @@ class DemographicsImpactForm(forms.ModelForm):
 
         self.report = report
 
+        # Doc-starred; both have "Prefer not to..." options.
+        self.fields["gender"].required = True
+        self.fields["gender"].error_messages["required"] = (
+            "Please answer, or choose \"Prefer not to answer\"."
+        )
+        self.fields["religion"].required = True
+        self.fields["religion"].error_messages["required"] = (
+            "Please answer, or choose \"Prefer not to say\"."
+        )
+
         categories = {
             "race_ethnicity":
                 ReportOption.Category.RACE_ETHNICITY,
@@ -1143,6 +1349,49 @@ class DemographicsImpactForm(forms.ModelForm):
             )
 
         return races
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        # Doc-starred option questions; both lists carry a safe
+        # catch-all ("None" / "Other or Prefer not to say").
+        if (
+            "race_ethnicity" not in self.errors
+            and not cleaned_data.get("race_ethnicity")
+        ):
+            self.add_error(
+                "race_ethnicity",
+                "Please choose up to three, or \"Other or Prefer "
+                "not to say\".",
+            )
+
+        if (
+            "targeted_identities" not in self.errors
+            and not cleaned_data.get("targeted_identities")
+        ):
+            self.add_error(
+                "targeted_identities",
+                "Please select at least one; \"None\" is an option.",
+            )
+
+        # The SWANA follow-up is starred and only applies when
+        # SWANA/MENA is selected above.
+        races = cleaned_data.get("race_ethnicity")
+
+        if races is not None and races.filter(
+            slug="swana_mena"
+        ).exists():
+            if (
+                "arab_palestinian_identity" not in self.errors
+                and not cleaned_data.get("arab_palestinian_identity")
+            ):
+                self.add_error(
+                    "arab_palestinian_identity",
+                    "Please answer the Arab or Palestinian identity "
+                    "question (there is a \"don't identify\" option).",
+                )
+
+        return cleaned_data
 
     def save_options(self, report):
         mappings = {
@@ -1182,6 +1431,12 @@ class FinalQuestionsForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Doc-starred.
+        self.fields["connection_change"].required = True
+        self.fields["connection_change"].error_messages["required"] = (
+            "Please answer the connection question."
+        )
 
         # The signature is server-required (clean_* below); mark the
         # fields required so the asterisk convention shows it. The
