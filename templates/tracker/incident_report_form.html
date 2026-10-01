@@ -198,16 +198,25 @@
 
 
     {# ========================================================== #}
-    {# 1. CONSENT + CONTACT #}
+    {# CONSENT #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>1. Consent and contact information</h2>
+        <h2>Consent</h2>
 
         {{ contact_form.has_consented|as_crispy_field }}
 
-        <hr>
+    </section>
+
+
+    {# ========================================================== #}
+    {# 1. CONTACT #}
+    {# ========================================================== #}
+
+    <section class="form-section">
+
+        <h2>1. Contact information</h2>
 
         {{ contact_form.state|as_crispy_field }}
 
