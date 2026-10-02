@@ -136,6 +136,11 @@ class IncidentReport(models.Model):
     zip_code = models.CharField(max_length=20, blank=True)
     anti_palestinian_racism = models.CharField(max_length=10,
         choices=YES_NO_MAYBE_CHOICES, blank=True, db_index=True)
+    anti_palestinian_racism_reason = models.TextField(blank=True,
+        help_text=(
+            "Why the respondent believes the incident was "
+            "anti-Palestinian racism (asked on yes/maybe)."
+        ))
     knows_of_other_apr_incidents = models.BooleanField(
         null=True, blank=True,
         help_text=(
