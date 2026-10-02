@@ -670,6 +670,8 @@
 
         {{ school_form.grade|as_crispy_field }}
 
+        {{ school_form.principal|as_crispy_field }}
+
         {{ school_form.location_within_school|as_crispy_field }}
 
     </section>
@@ -1431,6 +1433,7 @@ document.addEventListener("DOMContentLoaded", function () {
             "id_california-student_date_of_birth",
             "id_california-child_full_name",
             "id_school-grade",
+            "id_school-principal",
             "id_school-location_within_school",
             "id_school-educational_requirement_violated",
             // Formal complaint details: the section only shows once

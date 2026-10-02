@@ -108,6 +108,30 @@ def get_spec(cds):
     return spec
 
 
+def get_school_info(cds, name):
+    """
+    Best-effort public school address lookup via the portal
+    (GET /api/school). Returns {} on any failure — the hand-off
+    simply asks the question instead.
+    """
+
+    if not (cds and name):
+        return {}
+
+    try:
+        info = _get_json(
+            "/api/school",
+            {"cds": cds, "q": name},
+        )
+    except PortalError:
+        return {}
+
+    if not isinstance(info, dict) or not info.get("found"):
+        return {}
+
+    return info
+
+
 def generate_pdf(cds, answers, timeout=60):
     """POST answers to the portal; return the filled PDF bytes."""
 
@@ -264,6 +288,29 @@ def known_answers(report):
         if name:
             answers.setdefault("student_name", name)
 
+    # "You are filing this complaint on behalf of": the affected
+    # person, or "Myself" when the reporter is the affected person.
+    on_behalf = ""
+    if affected:
+        if affected.is_reporter:
+            on_behalf = "Myself"
+        else:
+            on_behalf = (
+                f"{affected.first_name} {affected.last_name}".strip()
+            )
+    if not on_behalf and california and california.child_full_name:
+        on_behalf = california.child_full_name
+    if on_behalf:
+        # Every text-field spelling the district specs use.
+        for key in (
+            "on_behalf_of",
+            "on_behalf_of_name",
+            "filing_on_behalf_of",
+            "behalf_of_name",
+            "behalf_of",
+        ):
+            answers[key] = on_behalf
+
     if school:
         answers.update({
             "student_school": school.school_name,
@@ -413,7 +460,7 @@ def checkbox_prechecks(report, spec_fields):
 # QUESTION PLAN
 # ---------------------------------------------------------------------
 
-def build_plan(report, spec):
+def build_plan(report, spec, cds=None):
     """
     Split the district's fields into what we already have and what we
     still need to ask.
@@ -427,6 +474,31 @@ def build_plan(report, spec):
 
     answers = known_answers(report)
     fields = spec.get("fields", [])
+
+    # Public school address data: fill from the portal's school
+    # lookup when the district form asks for it and the reporter's
+    # answers do not already cover it. Silent on any failure.
+    _SCHOOL_INFO_KEYS = {
+        "school_address": "address",
+        "school_city": "city",
+        "school_zip": "zip",
+    }
+    wanted = [
+        field["key"]
+        for field in fields
+        if field.get("key") in _SCHOOL_INFO_KEYS
+        and not answers.get(field.get("key"))
+    ]
+    if wanted:
+        school = getattr(report, "school_incident", None)
+        info = get_school_info(
+            cds,
+            school.school_name if school else "",
+        )
+        for key in wanted:
+            value = info.get(_SCHOOL_INFO_KEYS[key])
+            if value:
+                answers[key] = value
     checked = checkbox_prechecks(report, fields)
 
     prefilled = []

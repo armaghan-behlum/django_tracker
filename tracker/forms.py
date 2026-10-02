@@ -773,6 +773,7 @@ class SchoolIncidentForm(forms.ModelForm):
             "school_name",
             "school_district",
             "grade",
+            "principal",
             "location_within_school",
             "school_type",
             "school_type_other",
@@ -852,6 +853,9 @@ class SchoolIncidentForm(forms.ModelForm):
                 attrs={"class": "form-control"}
             ),
             "grade": forms.TextInput(
+                attrs={"class": "form-control"}
+            ),
+            "principal": forms.TextInput(
                 attrs={"class": "form-control"}
             ),
             "location_within_school": forms.TextInput(
@@ -935,6 +939,7 @@ class SchoolIncidentForm(forms.ModelForm):
                     "Please provide the grade; if not applicable, "
                     "write n/a."
                 ),
+                "principal": "Please provide the principal's name.",
                 "location_within_school": (
                     "Please tell us where in the school it happened."
                 ),

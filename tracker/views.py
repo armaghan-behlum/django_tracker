@@ -698,7 +698,7 @@ def ucp_offer(request, uuid):
 
         try:
             spec = ucp.get_spec(cds)
-            plan = ucp.build_plan(report, spec)
+            plan = ucp.build_plan(report, spec, cds=cds)
 
         except ucp.PortalError:
             logger.exception("UCP portal unavailable")
@@ -772,7 +772,7 @@ def ucp_offer(request, uuid):
 
         try:
             spec = ucp.get_spec(cds)
-            plan = ucp.build_plan(report, spec)
+            plan = ucp.build_plan(report, spec, cds=cds)
 
         except ucp.PortalError:
             logger.exception("UCP portal unavailable")
