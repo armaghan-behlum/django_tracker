@@ -528,6 +528,13 @@
             </dl>
         </details>
 
+        <div
+            class="conditional-section"
+            id="apr-reason-section"
+        >
+            {{ incident_form.anti_palestinian_racism_reason|as_crispy_field }}
+        </div>
+
         {{ incident_form.knows_of_other_apr_incidents|as_crispy_field }}
 
     </section>
@@ -673,6 +680,8 @@
         {{ school_form.principal|as_crispy_field }}
 
         {{ school_form.location_within_school|as_crispy_field }}
+
+        {{ final_form.connection_change|as_crispy_field }}
 
     </section>
 
@@ -924,7 +933,7 @@
 
         <h3 id="wellbeing-impacts-heading">
             Regarding your personal well-being and health, what
-            impacts did you experience as a result of this incident?
+            impacts did you experience as a result of this incident?*
         </h3>
 
         <p class="text-muted">
@@ -946,10 +955,6 @@
         >
             {{ demographics_form.wellbeing_impacts_other|as_crispy_field }}
         </div>
-
-        <hr>
-
-        {{ final_form.connection_change|as_crispy_field }}
 
     </section>
 
@@ -1436,6 +1441,7 @@ document.addEventListener("DOMContentLoaded", function () {
             "id_school-principal",
             "id_school-location_within_school",
             "id_school-educational_requirement_violated",
+            "id_final-connection_change",
             // Formal complaint details: the section only shows once
             // the reporter authorizes the district complaint, and
             // all of these are doc-starred and required then.
@@ -1817,6 +1823,17 @@ document.addEventListener("DOMContentLoaded", function () {
     ];
 
 
+    function updateAprReason() {
+
+        const apr = value("id_incident-anti_palestinian_racism");
+
+        setVisible(
+            "apr-reason-section",
+            apr === "yes" || apr === "maybe"
+        );
+    }
+
+
     function updateOtherTexts() {
 
         for (const [name, id] of OTHER_TEXT_SECTIONS) {
@@ -1887,6 +1904,8 @@ document.addEventListener("DOMContentLoaded", function () {
         updateArabPalestinian();
 
         updateAbsenceFrequency();
+
+        updateAprReason();
 
         updateOtherTexts();
 
