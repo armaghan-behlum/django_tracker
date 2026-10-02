@@ -115,11 +115,6 @@ def incident_report_create(request):
             prefix="demographics",
         )
 
-        final_form = FinalQuestionsForm(
-            request.POST,
-            prefix="final",
-        )
-
         attachment_form = AttachmentForm(
             request.POST,
             request.FILES,
@@ -129,7 +124,6 @@ def incident_report_create(request):
         # Validate these once so we can safely inspect cleaned_data.
         incident_valid = incident_form.is_valid()
         demographics_valid = demographics_form.is_valid()
-        final_valid = final_form.is_valid()
         attachment_valid = attachment_form.is_valid()
 
         # Path signals for conditional requirements. The raw
@@ -139,6 +133,16 @@ def incident_report_create(request):
             incident_valid
             and location_includes_school(incident_form)
         )
+
+        # Bound after the school signal: the connection question
+        # renders in the school section and is required only there.
+        final_form = FinalQuestionsForm(
+            request.POST,
+            prefix="final",
+            school_location=school_location,
+        )
+
+        final_valid = final_form.is_valid()
 
         authorize = (
             request.POST.get("formal-authorize_autopopulation")
@@ -273,6 +277,7 @@ def incident_report_create(request):
                     "city",
                     "zip_code",
                     "anti_palestinian_racism",
+                    "anti_palestinian_racism_reason",
                     "knows_of_other_apr_incidents",
                     "similar_incidents",
                     "previously_reported",
@@ -503,6 +508,22 @@ def incident_report_create(request):
         ]:
             if form is not None and form.is_bound and form.errors:
                 error_sections.append(section)
+
+        # The connection question renders inside School information
+        # even though it lives on the final form.
+        if (
+            final_form.is_bound
+            and "connection_change" in final_form.errors
+        ):
+            if "School information" not in error_sections:
+                error_sections.append("School information")
+            if (
+                list(final_form.errors) == ["connection_change"]
+                and "Signature and final questions" in error_sections
+            ):
+                error_sections.remove(
+                    "Signature and final questions"
+                )
 
         # ---------------------------------------------------------
         # INVALID: GUARD THE RE-RENDER

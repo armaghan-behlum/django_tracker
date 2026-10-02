@@ -356,6 +356,7 @@ class IncidentDetailsForm(forms.ModelForm):
             "city",
             "zip_code",
             "anti_palestinian_racism",
+            "anti_palestinian_racism_reason",
             "knows_of_other_apr_incidents",
             "similar_incidents",
             "previously_reported",
@@ -377,6 +378,10 @@ class IncidentDetailsForm(forms.ModelForm):
             "city": "In what city did the incident take place?",
             "zip_code": (
                 "In what zip code did the incident take place?"
+            ),
+            "anti_palestinian_racism_reason": (
+                "Why do you believe this was anti-Palestinian "
+                "racism?"
             ),
             "anti_palestinian_racism": (
                 "Are you reporting an incident or experience that "
@@ -440,6 +445,12 @@ class IncidentDetailsForm(forms.ModelForm):
             ),
             "zip_code": forms.TextInput(
                 attrs={"class": "form-control"}
+            ),
+            "anti_palestinian_racism_reason": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 3,
+                }
             ),
             "anti_palestinian_racism": forms.Select(
                 attrs={"class": "form-select"}
@@ -1369,6 +1380,18 @@ class DemographicsImpactForm(forms.ModelForm):
                 "Please select at least one; \"None\" is an option.",
             )
 
+        # Required per Halah 10/02; the list carries "None of
+        # these" and "Other" escapes.
+        if (
+            "wellbeing_impacts" not in self.errors
+            and not cleaned_data.get("wellbeing_impacts")
+        ):
+            self.add_error(
+                "wellbeing_impacts",
+                "Please select at least one; \"None of these\" is "
+                "an option.",
+            )
+
         # The SWANA follow-up is starred and only applies when
         # SWANA/MENA is selected above.
         races = cleaned_data.get("race_ethnicity")
@@ -1424,11 +1447,13 @@ class DemographicsImpactForm(forms.ModelForm):
 
 class FinalQuestionsForm(forms.ModelForm):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, school_location=False, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Doc-starred.
-        self.fields["connection_change"].required = True
+        # Doc-starred, but it renders in the School information
+        # section (Halah 10/02): required exactly when a school
+        # location applies.
+        self.fields["connection_change"].required = school_location
         self.fields["connection_change"].error_messages["required"] = (
             "Please answer the connection question."
         )
