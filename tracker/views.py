@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import transaction
 from django.shortcuts import (
     get_object_or_404,
@@ -20,6 +21,7 @@ from .forms import (
 )
 
 from .models import (
+    AffectedPerson,
     IncidentReport,
 )
 
@@ -79,6 +81,8 @@ def should_show_school_form(
 
 def incident_report_create(request):
 
+    error_sections = []
+
     if request.method == "POST":
 
         # ---------------------------------------------------------
@@ -90,14 +94,20 @@ def incident_report_create(request):
             prefix="contact",
         )
 
-        affected_person_form = AffectedPersonForm(
-            request.POST,
-            prefix="affected",
+        # Validate contact first: the state answer decides which
+        # later questions are required.
+        contact_valid = contact_form.is_valid()
+
+        state = (
+            contact_form.cleaned_data.get("state")
+            if contact_valid
+            else None
         )
 
         incident_form = IncidentDetailsForm(
             request.POST,
             prefix="incident",
+            state=state,
         )
 
         demographics_form = DemographicsImpactForm(
@@ -117,21 +127,22 @@ def incident_report_create(request):
         )
 
         # Validate these once so we can safely inspect cleaned_data.
-        contact_valid = contact_form.is_valid()
-        affected_person_valid = affected_person_form.is_valid()
         incident_valid = incident_form.is_valid()
         demographics_valid = demographics_form.is_valid()
         final_valid = final_form.is_valid()
         attachment_valid = attachment_form.is_valid()
 
-        # ---------------------------------------------------------
-        # DETERMINE STATE
-        # ---------------------------------------------------------
+        # Path signals for conditional requirements. The raw
+        # authorization answer is only a gating hint; the formal
+        # form itself validates it properly.
+        school_location = (
+            incident_valid
+            and location_includes_school(incident_form)
+        )
 
-        state = (
-            contact_form.cleaned_data.get("state")
-            if contact_valid
-            else None
+        authorize = (
+            request.POST.get("formal-authorize_autopopulation")
+            == "True"
         )
 
         # ---------------------------------------------------------
@@ -145,9 +156,23 @@ def incident_report_create(request):
             california_form = CaliforniaDetailsForm(
                 request.POST,
                 prefix="california",
+                school_location=school_location,
             )
 
             california_valid = california_form.is_valid()
+
+        is_ca_k12 = False
+
+        if (
+            state == "CA"
+            and california_form
+            and california_valid
+        ):
+            is_ca_k12 = bool(
+                california_form.cleaned_data.get(
+                    "is_k12_incident"
+                )
+            )
 
         # ---------------------------------------------------------
         # SCHOOL FORM
@@ -169,6 +194,9 @@ def incident_report_create(request):
             school_form = SchoolIncidentForm(
                 request.POST,
                 prefix="school",
+                school_location=school_location,
+                ca_k12=is_ca_k12,
+                authorize=authorize,
             )
 
             school_valid = school_form.is_valid()
@@ -179,19 +207,6 @@ def incident_report_create(request):
 
         formal_complaint_form = None
         formal_valid = True
-
-        is_ca_k12 = False
-
-        if (
-            state == "CA"
-            and california_form
-            and california_valid
-        ):
-            is_ca_k12 = bool(
-                california_form.cleaned_data.get(
-                    "is_k12_incident"
-                )
-            )
 
         if is_ca_k12:
             formal_complaint_form = FormalSchoolComplaintForm(
@@ -207,16 +222,15 @@ def incident_report_create(request):
         # REFERRALS
         # ---------------------------------------------------------
 
-        referral_form = None
-        referral_valid = True
+        # Every state gets the organization consent block: CA offers
+        # K-12 Legal Defense and CAIR, other states Palestine Legal;
+        # save() writes only the organizations for the report's state.
+        referral_form = ReferralForm(
+            request.POST,
+            prefix="referral",
+        )
 
-        if state == "CA":
-            referral_form = ReferralForm(
-                request.POST,
-                prefix="referral",
-            )
-
-            referral_valid = referral_form.is_valid()
+        referral_valid = referral_form.is_valid()
 
         # ---------------------------------------------------------
         # CHECK EVERYTHING
@@ -224,7 +238,6 @@ def incident_report_create(request):
 
         all_valid = all([
             contact_valid,
-            affected_person_valid,
             incident_valid,
             demographics_valid,
             final_valid,
@@ -314,22 +327,50 @@ def incident_report_create(request):
                 # -------------------------------------------------
                 # AFFECTED PERSON
                 # -------------------------------------------------
+                # The form no longer asks who was affected directly.
+                # A CA parent names their child, and the doc says the
+                # identity/demographics questions then describe the
+                # child — so the child is the affected person. In
+                # every other case the reporter is.
 
-                affected_person = (
-                    affected_person_form.save(
-                        commit=False
+                reporter_role = ""
+                child_name = ""
+
+                if california_form:
+                    reporter_role = (
+                        california_form.cleaned_data.get(
+                            "reporter_role"
+                        )
                     )
-                )
 
-                affected_person.report = report
-
-                if affected_person.is_reporter:
-                    affected_person.first_name = (
-                        report.first_name
+                    child_name = (
+                        california_form.cleaned_data.get(
+                            "child_full_name",
+                            "",
+                        ).strip()
                     )
 
-                    affected_person.last_name = (
-                        report.last_name
+                if reporter_role == "parent" and child_name:
+                    child_first, _, child_last = (
+                        child_name.rpartition(" ")
+                    )
+
+                    if not child_first:
+                        child_first, child_last = child_last, ""
+
+                    affected_person = AffectedPerson(
+                        report=report,
+                        is_reporter=False,
+                        first_name=child_first,
+                        last_name=child_last,
+                    )
+
+                else:
+                    affected_person = AffectedPerson(
+                        report=report,
+                        is_reporter=True,
+                        first_name=report.first_name,
+                        last_name=report.last_name,
                     )
 
                 affected_person.full_clean()
@@ -423,10 +464,78 @@ def incident_report_create(request):
                     report
                 )
 
+            # Offer the UCP hand-off only to reporters who said yes
+            # to autopopulating a formal complaint; everyone else
+            # (including an explicit "No") goes to the success page.
+            # The /ucp/ endpoint itself stays CA-K-12 gated, so a
+            # saved link still works if they change their mind.
+            authorized = bool(
+                formal_complaint_form
+                and formal_complaint_form.cleaned_data.get(
+                    "authorize_autopopulation"
+                )
+            )
+
             return redirect(
-                "ucp_offer" if ucp_eligible(report)
+                "ucp_offer"
+                if ucp_eligible(report) and authorized
                 else "incident_report_success",
                 uuid=report.uuid,
+            )
+
+        # ---------------------------------------------------------
+        # ERROR SUMMARY
+        # ---------------------------------------------------------
+        # Collected BEFORE the fallback binding below: a fallback
+        # form exists only so the re-render survives, and its
+        # "errors" are for sections that never applied to this path.
+
+        for form, section in [
+            (contact_form, "Consent and contact information"),
+            (referral_form, "Where should we report this incident"),
+            (incident_form, "Incident details"),
+            (california_form, "California K-12"),
+            (school_form, "School information"),
+            (formal_complaint_form, "California K-12 complaint"),
+            (demographics_form, "Experiences, impacts and identity"),
+            (final_form, "Signature and final questions"),
+            (attachment_form, "Supporting materials"),
+        ]:
+            if form is not None and form.is_bound and form.errors:
+                error_sections.append(section)
+
+        # ---------------------------------------------------------
+        # INVALID: GUARD THE RE-RENDER
+        # ---------------------------------------------------------
+        # Conditional forms stay None when their gate (state,
+        # K-12 answer, ...) could not be evaluated, but the template
+        # renders them unconditionally. Bind them to the POST so the
+        # error page renders and the reporter's entries survive.
+
+        if california_form is None:
+            california_form = CaliforniaDetailsForm(
+                request.POST,
+                prefix="california",
+            )
+
+        if school_form is None:
+            school_form = SchoolIncidentForm(
+                request.POST,
+                prefix="school",
+            )
+
+        if formal_complaint_form is None:
+            formal_complaint_form = (
+                FormalSchoolComplaintForm(
+                    request.POST,
+                    prefix="formal",
+                )
+            )
+
+        if referral_form is None:
+            referral_form = ReferralForm(
+                request.POST,
+                prefix="referral",
             )
 
     else:
@@ -437,10 +546,6 @@ def incident_report_create(request):
 
         contact_form = IncidentContactForm(
             prefix="contact",
-        )
-
-        affected_person_form = AffectedPersonForm(
-            prefix="affected",
         )
 
         incident_form = IncidentDetailsForm(
@@ -483,7 +588,6 @@ def incident_report_create(request):
 
     context = {
         "contact_form": contact_form,
-        "affected_person_form": affected_person_form,
         "incident_form": incident_form,
         "california_form": california_form,
         "school_form": school_form,
@@ -492,6 +596,8 @@ def incident_report_create(request):
         "final_form": final_form,
         "referral_form": referral_form,
         "attachment_form": attachment_form,
+        "data_retention_doc_url": settings.DATA_RETENTION_DOC_URL,
+        "error_sections": error_sections,
     }
 
     return render(
@@ -592,7 +698,7 @@ def ucp_offer(request, uuid):
 
         try:
             spec = ucp.get_spec(cds)
-            plan = ucp.build_plan(report, spec)
+            plan = ucp.build_plan(report, spec, cds=cds)
 
         except ucp.PortalError:
             logger.exception("UCP portal unavailable")
@@ -666,7 +772,7 @@ def ucp_offer(request, uuid):
 
         try:
             spec = ucp.get_spec(cds)
-            plan = ucp.build_plan(report, spec)
+            plan = ucp.build_plan(report, spec, cds=cds)
 
         except ucp.PortalError:
             logger.exception("UCP portal unavailable")

@@ -1,5 +1,31 @@
 from django import forms
+from django.conf import settings
 from django.forms import ClearableFileInput
+
+from hcaptcha.fields import hCaptchaField
+
+
+class SafeHCaptchaField(hCaptchaField):
+    """
+    The upstream field only catches HTTPError during verification; a
+    connection failure, timeout, or malformed response escapes and
+    turns the whole submission into a server error, destroying the
+    reporter's entries. Turn those into a field error instead so the
+    form re-renders populated and can be retried.
+    """
+
+    def validate(self, value):
+        try:
+            super().validate(value)
+        except forms.ValidationError:
+            raise
+        except Exception as exc:
+            raise forms.ValidationError(
+                "We could not reach the verification service. "
+                "Your answers are still here — please try "
+                "submitting again in a moment.",
+                code="error_hcaptcha",
+            ) from exc
 
 from .models import (
     IncidentReport,
@@ -26,6 +52,16 @@ YES_NO_RADIO = forms.RadioSelect(
         (False, "No"),
     ]
 )
+
+
+class OptionMultipleChoiceField(forms.ModelMultipleChoiceField):
+    """
+    Checkbox labels show the option's own label ("University"),
+    not str(option) ("Location type: University").
+    """
+
+    def label_from_instance(self, obj):
+        return obj.label
 
 
 class MultipleFileInput(ClearableFileInput):
@@ -62,6 +98,25 @@ def option_queryset(category):
     )
 
 
+def length_ordered(queryset):
+    """
+    Display order for ragged checkbox grids: shortest label first so
+    items of similar height share a grid row; "Other..." stays last.
+    Seed sort_order is untouched — this is presentation only.
+    """
+    from django.db.models import Case, IntegerField, Value, When
+    from django.db.models.functions import Length
+
+    return queryset.annotate(
+        _other=Case(
+            When(slug__icontains="other", then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        ),
+        _len=Length("label"),
+    ).order_by("_other", "_len", "label")
+
+
 def initial_option_ids(report, category):
     if not report or not report.pk:
         return []
@@ -75,16 +130,23 @@ def initial_option_ids(report, category):
     )
 
 
-def save_option_selections(report, category, options):
+def save_option_selections(report, category, options, other_text=""):
     ReportOptionSelection.objects.filter(
         report=report,
         option__category=category,
     ).delete()
 
+    # other_text lands only on the option that allows it (the
+    # category's "Other" choice), never on fixed options.
     ReportOptionSelection.objects.bulk_create([
         ReportOptionSelection(
             report=report,
             option=option,
+            other_text=(
+                other_text.strip()
+                if option.allows_other_text
+                else ""
+            ),
         )
         for option in options
     ])
@@ -108,6 +170,29 @@ class IncidentContactForm(forms.ModelForm):
             "phone",
         ]
 
+        labels = {
+            "has_consented": (
+                "I have read the above information, I am 13 or "
+                "older, and I agree to participate."
+            ),
+            "first_name": "First name",
+            "last_name": "Last name",
+            "email": "Email",
+            "phone": "Phone",
+        }
+
+        help_texts = {
+            # The label already carries the full consent statement.
+            "has_consented": "",
+            "email": (
+                "As a reminder, this form is end to end encrypted "
+                "and you may opt out of any contact."
+            ),
+            "phone": (
+                "Required for reports outside of California."
+            ),
+        }
+
         widgets = {
             "has_consented": forms.CheckboxInput(
                 attrs={"class": "form-check-input"}
@@ -129,6 +214,24 @@ class IncidentContactForm(forms.ModelForm):
             ),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # The doc starts the state drop-down on California.
+        self.fields["state"].initial = "CA"
+
+        # Consent is server-required (clean_has_consented); mark it
+        # required so the asterisk convention shows it, with the
+        # same message. Crispy's checkbox template renders no
+        # asterisk, so the label carries it directly.
+        self.fields["has_consented"].required = True
+        self.fields["has_consented"].error_messages["required"] = (
+            "You must consent before submitting this form."
+        )
+        self.fields["has_consented"].label = (
+            "I have read the above information, I am 13 or "
+            "older, and I agree to participate.*"
+        )
+
     def clean_has_consented(self):
         value = self.cleaned_data["has_consented"]
 
@@ -138,21 +241,6 @@ class IncidentContactForm(forms.ModelForm):
             )
 
         return value
-
-    def clean(self):
-        cleaned_data = super().clean()
-
-        state = cleaned_data.get("state")
-        phone = cleaned_data.get("phone")
-
-        if state and state != "CA" and not phone:
-            self.add_error(
-                "phone",
-                "Phone number is required for non-California reports.",
-            )
-
-        return cleaned_data
-
 
 # ---------------------------------------------------------------------
 # AFFECTED PERSON
@@ -217,22 +305,43 @@ class AffectedPersonForm(forms.ModelForm):
 
 class IncidentDetailsForm(forms.ModelForm):
 
-    racism_types = forms.ModelMultipleChoiceField(
+    racism_types = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label="",
     )
 
-    location_types = forms.ModelMultipleChoiceField(
+    location_types = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label="",
     )
 
-    incident_types = forms.ModelMultipleChoiceField(
+    incident_types = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label="",
+    )
+
+    racism_types_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
+    )
+
+    location_types_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
+    )
+
+    incident_types_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
     )
 
     class Meta:
@@ -252,6 +361,53 @@ class IncidentDetailsForm(forms.ModelForm):
             "previously_reported",
             "resolution_steps",
         ]
+
+        labels = {
+            "date_precision": (
+                "When did the incident take place? Please give us "
+                "your best estimate."
+            ),
+            "incident_date": "Date",
+            "incident_month": "Month",
+            "incident_year": "Year",
+            "description": (
+                "Please describe what happened. Provide as much "
+                "detail as possible."
+            ),
+            "city": "In what city did the incident take place?",
+            "zip_code": (
+                "In what zip code did the incident take place?"
+            ),
+            "anti_palestinian_racism": (
+                "Are you reporting an incident or experience that "
+                "you believe constitutes anti-Palestinian racism?"
+            ),
+            "knows_of_other_apr_incidents": (
+                "Aside from this incident, have you witnessed other "
+                "incidents of anti-Palestinian racism or do you "
+                "personally know of others who have experienced "
+                "anti-Palestinian racism?"
+            ),
+            "similar_incidents": (
+                "Have similar incidents occurred before?"
+            ),
+            "previously_reported": "Did you report this incident?",
+            "resolution_steps": (
+                "What steps, if any, did you take to resolve the "
+                "issue before or aside from filing a complaint?"
+            ),
+        }
+
+        help_texts = {
+            "description": (
+                "For example: what happened, where it happened, who "
+                "was involved, what did you do, did you get a "
+                "resolution, etc."
+            ),
+            "knows_of_other_apr_incidents": "",
+            "previously_reported": "",
+            "resolution_steps": "",
+        }
 
         widgets = {
             "date_precision": forms.Select(
@@ -301,7 +457,7 @@ class IncidentDetailsForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, report=None, **kwargs):
+    def __init__(self, *args, report=None, state=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.report = report or (
@@ -310,16 +466,46 @@ class IncidentDetailsForm(forms.ModelForm):
             else None
         )
 
+        self.state = state
+
+        # Doc-starred questions are genuinely required.
+        for name, message in {
+            "zip_code": (
+                "Please provide the zip code where the incident "
+                "took place."
+            ),
+            "anti_palestinian_racism": (
+                "Please answer the anti-Palestinian racism question."
+            ),
+            "knows_of_other_apr_incidents": (
+                "Please answer yes or no."
+            ),
+            "similar_incidents": (
+                "Please tell us whether similar incidents occurred "
+                "before."
+            ),
+        }.items():
+            self.fields[name].required = True
+            self.fields[name].error_messages["required"] = message
+
+        # The doc stars the city question for California.
+        if state == "CA":
+            self.fields["city"].required = True
+            self.fields["city"].error_messages["required"] = (
+                "Please provide the California city where the "
+                "incident took place."
+            )
+
         self.fields["racism_types"].queryset = option_queryset(
             ReportOption.Category.RACISM_TYPE
         )
 
-        self.fields["location_types"].queryset = option_queryset(
-            ReportOption.Category.LOCATION_TYPE
+        self.fields["location_types"].queryset = length_ordered(
+            option_queryset(ReportOption.Category.LOCATION_TYPE)
         )
 
-        self.fields["incident_types"].queryset = option_queryset(
-            ReportOption.Category.INCIDENT_TYPE
+        self.fields["incident_types"].queryset = length_ordered(
+            option_queryset(ReportOption.Category.INCIDENT_TYPE)
         )
 
         if self.report:
@@ -340,6 +526,37 @@ class IncidentDetailsForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+
+        # The three option questions are doc-starred: at least one
+        # selection each (every list carries an "Other" option).
+        for name, message in {
+            "racism_types": (
+                "Please select at least one form of racism, or "
+                "choose Other and describe it."
+            ),
+            "location_types": (
+                "Please select at least one location, or choose "
+                "Other and describe it."
+            ),
+            "incident_types": (
+                "Please select at least one incident type, or "
+                "choose Other and describe it."
+            ),
+        }.items():
+            if name not in self.errors and not cleaned_data.get(name):
+                self.add_error(name, message)
+
+        # NullBooleanField ignores required=True (its validate is a
+        # no-op), so the yes/no radio is enforced here.
+        if (
+            "knows_of_other_apr_incidents" not in self.errors
+            and cleaned_data.get("knows_of_other_apr_incidents")
+            is None
+        ):
+            self.add_error(
+                "knows_of_other_apr_incidents",
+                "Please answer yes or no.",
+            )
 
         precision = cleaned_data.get("date_precision")
 
@@ -370,18 +587,21 @@ class IncidentDetailsForm(forms.ModelForm):
             report,
             ReportOption.Category.RACISM_TYPE,
             self.cleaned_data["racism_types"],
+            self.cleaned_data.get("racism_types_other", ""),
         )
 
         save_option_selections(
             report,
             ReportOption.Category.LOCATION_TYPE,
             self.cleaned_data["location_types"],
+            self.cleaned_data.get("location_types_other", ""),
         )
 
         save_option_selections(
             report,
             ReportOption.Category.INCIDENT_TYPE,
             self.cleaned_data["incident_types"],
+            self.cleaned_data.get("incident_types_other", ""),
         )
 
 
@@ -402,6 +622,35 @@ class CaliforniaDetailsForm(forms.ModelForm):
             "child_full_name",
             "age",
         ]
+
+        labels = {
+            "is_k12_incident": (
+                "Are you reporting an incident related to a "
+                "California K-12 school system, or affecting someone "
+                "in that age range (kindergarten to 12th grade)?"
+            ),
+            "reporter_role": "Are you a:",
+            "reporter_role_other": "Please describe your role",
+            "student_date_of_birth": "Date of birth",
+            "child_full_name": (
+                "Please list the full name of the child you are "
+                "reporting on behalf of"
+            ),
+            "age": "Age",
+        }
+
+        help_texts = {
+            "is_k12_incident": (
+                "This could include something that happens online, "
+                "interpersonally outside of the school or district, "
+                "as well as incidents within K-12 schools statewide."
+            ),
+            "reporter_role": (
+                "Please note if you are a parent or guardian filling "
+                "out on behalf of your child, the questions on race, "
+                "identity, etc. should represent the child."
+            ),
+        }
 
         widgets = {
             "is_k12_incident": YES_NO_RADIO,
@@ -425,8 +674,42 @@ class CaliforniaDetailsForm(forms.ModelForm):
             ),
         }
 
+    def __init__(self, *args, school_location=False, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.school_location = school_location
+
+        # Doc-starred for California reports.
+        self.fields["is_k12_incident"].required = True
+        self.fields["is_k12_incident"].error_messages["required"] = (
+            "Please answer yes or no."
+        )
+
+        self.fields["age"].required = True
+        self.fields["age"].error_messages["required"] = (
+            "Please provide the age of the person affected."
+        )
+
+        # "Are you a:" renders in the School information block, so
+        # it is only answerable (and required) for school incidents.
+        if school_location:
+            self.fields["reporter_role"].required = True
+            self.fields["reporter_role"].error_messages[
+                "required"
+            ] = "Please tell us your role."
+
     def clean(self):
         cleaned_data = super().clean()
+
+        # NullBooleanField ignores required=True; enforce the radio.
+        if (
+            "is_k12_incident" not in self.errors
+            and cleaned_data.get("is_k12_incident") is None
+        ):
+            self.add_error(
+                "is_k12_incident",
+                "Please answer yes or no.",
+            )
 
         role = cleaned_data.get("reporter_role")
 
@@ -460,16 +743,27 @@ class CaliforniaDetailsForm(forms.ModelForm):
 
 class SchoolIncidentForm(forms.ModelForm):
 
-    educational_impacts = forms.ModelMultipleChoiceField(
+    educational_impacts = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label="",
     )
 
-    nonreport_reasons = forms.ModelMultipleChoiceField(
+    nonreport_reasons = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label=(
+            "If you did not report this incident before, can you "
+            "indicate your reason? Select any that apply."
+        ),
+    )
+
+    nonreport_reasons_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
     )
 
     class Meta:
@@ -493,6 +787,63 @@ class SchoolIncidentForm(forms.ModelForm):
             "absence_due_to_racism_frequency",
             "educational_requirement_violated",
         ]
+
+        labels = {
+            "school_name": "School Name",
+            "school_district": "School district",
+            "grade": (
+                "Grade of student or grade you teach; if not "
+                "applicable, write n/a"
+            ),
+            "location_within_school": (
+                "Where in the school did it happen?"
+            ),
+            "school_type": "School Type",
+            "school_type_other": "Other school type",
+            "school_was_aware": (
+                "Was the school aware of the incident? For example, "
+                "did you discuss your concerns with a Principal, "
+                "Supervisor, or Administrator?"
+            ),
+            "concerns_addressed_to": (
+                "Who did you address your concerns to?"
+            ),
+            "concerns_addressed_date": (
+                "Your best guess at the date"
+            ),
+            "teacher_admin_response": (
+                "What were the responses of teachers or "
+                "administrators, witnesses or bystanders, if any?"
+            ),
+            "satisfied_with_response": (
+                "Were you satisfied with the school's response "
+                "after the incident?"
+            ),
+            "satisfaction_explanation": "Why or why not?",
+            "school_response_effect": (
+                "Did the school's response improve or worsen the "
+                "school environment for you?"
+            ),
+            "absence_due_to_racism_frequency": (
+                "How often did fear of anti-Palestinian or other "
+                "racism cause you to miss school?"
+            ),
+            "educational_requirement_violated": (
+                "Was there any educational or program requirement "
+                "you feel was violated in this incident?"
+            ),
+        }
+
+        help_texts = {
+            "concerns_addressed_to": "Please provide a name.",
+            "educational_requirement_violated": (
+                "For example: second-language, low income, or other "
+                "accommodations; graduation requirements; school "
+                "safety plans; fees or charges; course periods "
+                "without educational content; required consequences "
+                "for bullying or educational safety, etc."
+            ),
+        }
 
         widgets = {
             "school_name": forms.TextInput(
@@ -557,10 +908,51 @@ class SchoolIncidentForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, report=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        report=None,
+        school_location=False,
+        ca_k12=False,
+        authorize=False,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
 
         self.report = report
+        self.school_location = school_location
+        self.ca_k12 = ca_k12
+        self.authorize = authorize
+
+        # Doc-starred, gated on the path that reveals each field so
+        # a hidden field can never block submission.
+        required = {}
+
+        if school_location:
+            required.update({
+                "school_name": "Please provide the school's name.",
+                "school_type": "Please select the school type.",
+                "educational_requirement_violated": (
+                    "Please answer; if none applies, write \"none\"."
+                ),
+                "grade": (
+                    "Please provide the grade; if not applicable, "
+                    "write n/a."
+                ),
+                "principal": "Please provide the principal's name.",
+                "location_within_school": (
+                    "Please tell us where in the school it happened."
+                ),
+            })
+
+        if ca_k12:
+            required["school_district"] = (
+                "Please provide the school district."
+            )
+
+        for name, message in required.items():
+            self.fields[name].required = True
+            self.fields[name].error_messages["required"] = message
 
         self.fields["educational_impacts"].queryset = option_queryset(
             ReportOption.Category.EDUCATIONAL_IMPACT
@@ -592,6 +984,7 @@ class SchoolIncidentForm(forms.ModelForm):
             report,
             ReportOption.Category.NONREPORT_REASON,
             self.cleaned_data["nonreport_reasons"],
+            self.cleaned_data.get("nonreport_reasons_other", ""),
         )
 
 
@@ -616,6 +1009,58 @@ class FormalSchoolComplaintForm(forms.ModelForm):
             "requested_remedy",
             "complainant_address",
         ]
+
+        labels = {
+            "previously_submitted_to_district": (
+                "Have you already submitted a complaint to the "
+                "district (such as through the Uniform Complaints "
+                "Procedure)?"
+            ),
+            "authorize_autopopulation": (
+                "Would you like to authorize this form to "
+                "autopopulate a formal complaint to the district "
+                "authority or state?"
+            ),
+            "complaint_against": (
+                "Who are you filing the complaint against?"
+            ),
+            "individuals_involved": "List of individuals involved",
+            "witnesses": "List any witnesses to the incident",
+            "discussed_with_principal_or_supervisor": (
+                "Did you discuss your concerns with the Principal "
+                "or a Supervisor?"
+            ),
+            "concerns_addressed_to": (
+                "Who did you address your concerns to?"
+            ),
+            "concerns_addressed_date": (
+                "Your best guess at the date"
+            ),
+            "requested_remedy": (
+                "If you want the District or school to take "
+                "particular action to remedy what happened, please "
+                "specify"
+            ),
+            "complainant_address": "What is your address?",
+        }
+
+        help_texts = {
+            "authorize_autopopulation": (
+                "Please note, official complaints to local "
+                "authorities must be submitted within six (6) "
+                "months of the incident."
+            ),
+            "complaint_against": (
+                "Include Name, Job Title, and School / Department "
+                "if relevant."
+            ),
+            "concerns_addressed_to": "Please provide a name.",
+            "complainant_address": (
+                "Please include full address and apartment number. "
+                "This is required for submitting the formal "
+                "complaint."
+            ),
+        }
 
         widgets = {
             "previously_submitted_to_district": YES_NO_RADIO,
@@ -662,15 +1107,64 @@ class FormalSchoolComplaintForm(forms.ModelForm):
             ),
         }
 
+    # Everything the reporter only sees after authorizing the formal
+    # complaint. Without authorization these fields are hidden, so
+    # they must neither block submission nor be saved.
+    DETAIL_FIELDS = [
+        "complaint_against",
+        "individuals_involved",
+        "witnesses",
+        "discussed_with_principal_or_supervisor",
+        "concerns_addressed_to",
+        "concerns_addressed_date",
+        "requested_remedy",
+        "complainant_address",
+    ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # This form only exists on the CA K-12 path, where the doc
+        # stars both yes/no questions.
+        self.fields["previously_submitted_to_district"].required = True
+        self.fields["previously_submitted_to_district"].error_messages[
+            "required"
+        ] = "Please answer yes or no."
+
+        self.fields["authorize_autopopulation"].required = True
+        self.fields["authorize_autopopulation"].error_messages[
+            "required"
+        ] = "Please answer yes or no."
+
     def clean(self):
         cleaned_data = super().clean()
 
         authorize = cleaned_data.get("authorize_autopopulation")
 
+        # NullBooleanField ignores required=True; enforce both
+        # yes/no radios here.
+        for radio in (
+            "previously_submitted_to_district",
+            "authorize_autopopulation",
+        ):
+            if (
+                radio not in self.errors
+                and cleaned_data.get(radio) is None
+            ):
+                self.add_error(radio, "Please answer yes or no.")
+
         if authorize:
             required = {
                 "complaint_against":
                     "Please identify who the complaint is against.",
+                "individuals_involved":
+                    "Please list the individuals involved.",
+                "witnesses": (
+                    "Please list any witnesses; if none, write "
+                    "\"none\"."
+                ),
+                "discussed_with_principal_or_supervisor":
+                    "Please answer yes or no.",
                 "requested_remedy":
                     "Please describe the action you would like taken.",
                 "complainant_address":
@@ -678,11 +1172,28 @@ class FormalSchoolComplaintForm(forms.ModelForm):
             }
 
             for field, message in required.items():
-                if not cleaned_data.get(field):
+                # "No" (False) is a real answer; only missing/blank
+                # values count as unanswered.
+                if cleaned_data.get(field) in (None, ""):
                     self.add_error(
                         field,
                         message,
                     )
+
+        else:
+            for field in self.DETAIL_FIELDS:
+                # A hidden field can carry a stale or invalid value
+                # (e.g. a half-typed date before the reporter
+                # answered "No"); drop its error and its value.
+                self.errors.pop(field, None)
+
+                model_field = (
+                    self._meta.model._meta.get_field(field)
+                )
+
+                cleaned_data[field] = (
+                    "" if not model_field.null else None
+                )
 
         return cleaned_data
 
@@ -693,34 +1204,57 @@ class FormalSchoolComplaintForm(forms.ModelForm):
 
 class DemographicsImpactForm(forms.ModelForm):
 
-    race_ethnicity = forms.ModelMultipleChoiceField(
+    race_ethnicity = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label="",
     )
 
-    arab_palestinian_identity = forms.ModelMultipleChoiceField(
+    arab_palestinian_identity = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label="",
     )
 
-    targeted_identities = forms.ModelMultipleChoiceField(
+    targeted_identities = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label="",
     )
 
-    discrimination_experiences = forms.ModelMultipleChoiceField(
+    discrimination_experiences = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label="",
     )
 
-    wellbeing_impacts = forms.ModelMultipleChoiceField(
+    wellbeing_impacts = OptionMultipleChoiceField(
         queryset=ReportOption.objects.none(),
         required=False,
         widget=forms.CheckboxSelectMultiple,
+        label="",
+    )
+
+    targeted_identities_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
+    )
+
+    discrimination_experiences_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
+    )
+
+    wellbeing_impacts_other = forms.CharField(
+        required=False,
+        max_length=500,
+        label="If Other, please specify",
     )
 
     class Meta:
@@ -732,6 +1266,16 @@ class DemographicsImpactForm(forms.ModelForm):
             "religion",
             "religion_other",
         ]
+
+        labels = {
+            "gender": "What's your gender?",
+            "gender_other": "Gender (other)",
+            "religion": (
+                "Which option below do you most identify with in "
+                "regard to faith or religion?"
+            ),
+            "religion_other": "Faith or religion (other)",
+        }
 
         widgets = {
             "gender": forms.Select(
@@ -752,6 +1296,16 @@ class DemographicsImpactForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         self.report = report
+
+        # Doc-starred; both have "Prefer not to..." options.
+        self.fields["gender"].required = True
+        self.fields["gender"].error_messages["required"] = (
+            "Please answer, or choose \"Prefer not to answer\"."
+        )
+        self.fields["religion"].required = True
+        self.fields["religion"].error_messages["required"] = (
+            "Please answer, or choose \"Prefer not to say\"."
+        )
 
         categories = {
             "race_ethnicity":
@@ -791,6 +1345,49 @@ class DemographicsImpactForm(forms.ModelForm):
 
         return races
 
+    def clean(self):
+        cleaned_data = super().clean()
+
+        # Doc-starred option questions; both lists carry a safe
+        # catch-all ("None" / "Other or Prefer not to say").
+        if (
+            "race_ethnicity" not in self.errors
+            and not cleaned_data.get("race_ethnicity")
+        ):
+            self.add_error(
+                "race_ethnicity",
+                "Please choose up to three, or \"Other or Prefer "
+                "not to say\".",
+            )
+
+        if (
+            "targeted_identities" not in self.errors
+            and not cleaned_data.get("targeted_identities")
+        ):
+            self.add_error(
+                "targeted_identities",
+                "Please select at least one; \"None\" is an option.",
+            )
+
+        # The SWANA follow-up is starred and only applies when
+        # SWANA/MENA is selected above.
+        races = cleaned_data.get("race_ethnicity")
+
+        if races is not None and races.filter(
+            slug="swana_mena"
+        ).exists():
+            if (
+                "arab_palestinian_identity" not in self.errors
+                and not cleaned_data.get("arab_palestinian_identity")
+            ):
+                self.add_error(
+                    "arab_palestinian_identity",
+                    "Please answer the Arab or Palestinian identity "
+                    "question (there is a \"don't identify\" option).",
+                )
+
+        return cleaned_data
+
     def save_options(self, report):
         mappings = {
             "race_ethnicity":
@@ -814,6 +1411,10 @@ class DemographicsImpactForm(forms.ModelForm):
                 report,
                 category,
                 self.cleaned_data[field_name],
+                self.cleaned_data.get(
+                    f"{field_name}_other",
+                    "",
+                ),
             )
 
 
@@ -822,6 +1423,34 @@ class DemographicsImpactForm(forms.ModelForm):
 # ---------------------------------------------------------------------
 
 class FinalQuestionsForm(forms.ModelForm):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Doc-starred.
+        self.fields["connection_change"].required = True
+        self.fields["connection_change"].error_messages["required"] = (
+            "Please answer the connection question."
+        )
+
+        # The signature is server-required (clean_* below); mark the
+        # fields required so the asterisk convention shows it. The
+        # messages match the clean_* ones the reporter already saw.
+        self.fields["signature_name"].required = True
+        self.fields["signature_name"].error_messages["required"] = (
+            "Please provide your digital signature."
+        )
+        self.fields["signature_date"].required = True
+        self.fields["signature_date"].error_messages["required"] = (
+            "Please provide the signature date."
+        )
+
+        # Human verification, only when keys are configured so local
+        # development without hCaptcha keys keeps working.
+        if settings.HCAPTCHA_SITEKEY:
+            self.fields["captcha"] = SafeHCaptchaField(
+                label="Verify you are human",
+            )
 
     class Meta:
         model = IncidentReport
@@ -835,6 +1464,40 @@ class FinalQuestionsForm(forms.ModelForm):
             "signature_name",
             "signature_date",
         ]
+
+        labels = {
+            "connection_change": (
+                "Did the incident change your feeling of connection "
+                "to your school or others in your school?"
+            ),
+            "other_identity_information": (
+                "Is there anything else about your identity that "
+                "you believe is relevant to the incident?"
+            ),
+            "additional_information": (
+                "Is there anything else you would like to share?"
+            ),
+            "support_sought_elsewhere": (
+                "Have you sought support from other organizations / "
+                "institutions / attorneys?"
+            ),
+            "opt_out_of_followup": (
+                "Check here to opt out of private follow-up "
+                "questions or clarifications from the research team."
+            ),
+            "signature_name": "Name",
+            "signature_date": "Date",
+        }
+
+        help_texts = {
+            "other_identity_information": (
+                "For example: Trans / gender-expansive, etc."
+            ),
+            "additional_information": "Optional!",
+            "support_sought_elsewhere": "",
+            # The label already says everything.
+            "opt_out_of_followup": "",
+        }
 
         widgets = {
             "connection_change": forms.Select(
@@ -898,106 +1561,173 @@ class FinalQuestionsForm(forms.ModelForm):
 # ---------------------------------------------------------------------
 
 class ReferralForm(forms.Form):
+    """
+    Where, if at all, the incident should be reported.
 
-    organizations = forms.ModelMultipleChoiceField(
-        queryset=ReferralOrganization.objects.none(),
+    By submitting the form, the reporter is already sharing the
+    incident with AROC and IUAPR; the only AROC/IUAPR decision here
+    is whether to anonymize (which opts out of follow-up). The other
+    organizations are opt-in, each with its own anonymize choice.
+    California reporters choose among K-12 Legal Defense and the
+    local CAIR chapter; reporters in other states choose Palestine
+    Legal. Saving only writes the organizations that apply to the
+    report's state.
+
+    Anonymize choices are nested under their organization in the
+    template; an anonymize box without its organization selected is
+    ignored rather than rejected, so nobody can accidentally opt
+    themselves out of submitting.
+    """
+
+    submit_k12_legal = forms.BooleanField(
         required=False,
-        widget=forms.CheckboxSelectMultiple,
-        label="Organizations to receive this report",
+        label="K-12 Legal Defense",
+        help_text=(
+            "A trusted pro-Palestine organization that can pursue "
+            "legal action."
+        ),
     )
 
-    anonymous_organizations = forms.ModelMultipleChoiceField(
-        queryset=ReferralOrganization.objects.none(),
+    anonymous_k12_legal = forms.BooleanField(
         required=False,
-        widget=forms.CheckboxSelectMultiple,
-        label="Submit anonymously to these organizations",
+        label="Make anonymous (not seeking legal counsel)",
     )
+
+    submit_cair = forms.BooleanField(
+        required=False,
+        label="Local CAIR Chapter",
+    )
+
+    anonymous_cair = forms.BooleanField(
+        required=False,
+        label="Make anonymous (not seeking legal counsel)",
+    )
+
+    submit_pal_legal = forms.BooleanField(
+        required=False,
+        label="Palestine Legal",
+    )
+
+    anonymous_pal_legal = forms.BooleanField(
+        required=False,
+        label="Make anonymous (not seeking legal counsel)",
+    )
+
+    aroc_anonymous = forms.BooleanField(
+        required=False,
+        label="Make anonymous (not seeking follow-up)",
+    )
+
+    ORGANIZATION_FIELDS = {
+        # org slug -> (submit field or None for always, anonymous field)
+        "k12_legal_defense": ("submit_k12_legal", "anonymous_k12_legal"),
+        "cair": ("submit_cair", "anonymous_cair"),
+        "palestine_legal": ("submit_pal_legal", "anonymous_pal_legal"),
+        "aroc_iuapr": (None, "aroc_anonymous"),
+    }
+
+    # Which organizations apply, by report state.
+    CA_ORG_SLUGS = {
+        "k12_legal_defense", "cair", "palestine_legal", "aroc_iuapr",
+    }
+    NON_CA_ORG_SLUGS = {"palestine_legal", "aroc_iuapr"}
 
     def __init__(self, *args, report=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        organizations = ReferralOrganization.objects.filter(
-            is_active=True
-        ).order_by(
-            "sort_order",
-            "name",
-        )
-
-        self.fields["organizations"].queryset = organizations
-        self.fields["anonymous_organizations"].queryset = organizations
-
         if report and report.pk:
-            referrals = report.referrals.select_related(
-                "organization"
-            )
-
-            self.fields["organizations"].initial = [
-                referral.organization_id
-                for referral in referrals
-            ]
-
-            self.fields["anonymous_organizations"].initial = [
-                referral.organization_id
-                for referral in referrals
-                if referral.anonymous
-            ]
-
-    def clean(self):
-        cleaned_data = super().clean()
-
-        organizations = cleaned_data.get("organizations")
-        anonymous = cleaned_data.get("anonymous_organizations")
-
-        if organizations is not None and anonymous is not None:
-            organization_ids = set(
-                organizations.values_list(
-                    "pk",
-                    flat=True,
+            referrals = {
+                referral.organization.slug: referral
+                for referral in report.referrals.select_related(
+                    "organization"
                 )
-            )
+            }
 
-            anonymous_ids = set(
-                anonymous.values_list(
-                    "pk",
-                    flat=True,
-                )
-            )
+            for slug, (submit_field, anon_field) in (
+                self.ORGANIZATION_FIELDS.items()
+            ):
+                referral = referrals.get(slug)
 
-            if not anonymous_ids.issubset(organization_ids):
-                self.add_error(
-                    "anonymous_organizations",
-                    (
-                        "An organization must first be selected "
-                        "to receive the report."
-                    ),
-                )
+                if referral:
+                    if submit_field:
+                        self.fields[submit_field].initial = True
 
-        return cleaned_data
+                    self.fields[anon_field].initial = (
+                        referral.anonymous
+                    )
 
     def save(self, report):
-        organizations = self.cleaned_data["organizations"]
-        anonymous = self.cleaned_data["anonymous_organizations"]
-
-        anonymous_ids = set(
-            anonymous.values_list(
-                "pk",
-                flat=True,
-            )
+        # Only the organizations that apply to this report's state
+        # are written; POST keys for the other state's organizations
+        # are ignored.
+        allowed = (
+            self.CA_ORG_SLUGS
+            if report.state == "CA"
+            else self.NON_CA_ORG_SLUGS
         )
 
+        organizations = {
+            organization.slug: organization
+            for organization in ReferralOrganization.objects.filter(
+                slug__in=allowed,
+            )
+        }
+
+        # Only this save's organizations: referral rows for other
+        # organizations must survive a re-save.
         ReportReferral.objects.filter(
-            report=report
+            report=report,
+            organization__slug__in=allowed,
         ).delete()
 
-        ReportReferral.objects.bulk_create([
-            ReportReferral(
-                report=report,
-                organization=organization,
-                submit=True,
-                anonymous=organization.pk in anonymous_ids,
+        referrals = []
+
+        for slug, (submit_field, anon_field) in (
+            self.ORGANIZATION_FIELDS.items()
+        ):
+            if slug not in allowed:
+                continue
+
+            organization = organizations.get(slug)
+
+            if organization is None:
+                continue
+
+            submitted = (
+                True
+                if submit_field is None
+                else self.cleaned_data.get(submit_field, False)
             )
-            for organization in organizations
-        ])
+
+            if not submitted:
+                continue
+
+            referrals.append(
+                ReportReferral(
+                    report=report,
+                    organization=organization,
+                    submit=True,
+                    anonymous=self.cleaned_data.get(
+                        anon_field,
+                        False,
+                    ),
+                )
+            )
+
+        ReportReferral.objects.bulk_create(referrals)
+
+        # The questionnaire defines "Make anonymous (not seeking
+        # follow-up)" on AROC/IUAPR as opting out of follow-up, so
+        # keep the report flag in step. Never cleared here: the
+        # reporter's explicit opt-out elsewhere must stand.
+        if (
+            self.cleaned_data.get("aroc_anonymous")
+            and not report.opt_out_of_followup
+        ):
+            report.opt_out_of_followup = True
+            report.save(
+                update_fields=["opt_out_of_followup"]
+            )
 
 
 # ---------------------------------------------------------------------

@@ -108,6 +108,30 @@ def get_spec(cds):
     return spec
 
 
+def get_school_info(cds, name):
+    """
+    Best-effort public school address lookup via the portal
+    (GET /api/school). Returns {} on any failure — the hand-off
+    simply asks the question instead.
+    """
+
+    if not (cds and name):
+        return {}
+
+    try:
+        info = _get_json(
+            "/api/school",
+            {"cds": cds, "q": name},
+        )
+    except PortalError:
+        return {}
+
+    if not isinstance(info, dict) or not info.get("found"):
+        return {}
+
+    return info
+
+
 def generate_pdf(cds, answers, timeout=60):
     """POST answers to the portal; return the filled PDF bytes."""
 
@@ -264,6 +288,29 @@ def known_answers(report):
         if name:
             answers.setdefault("student_name", name)
 
+    # "You are filing this complaint on behalf of": the affected
+    # person, or "Myself" when the reporter is the affected person.
+    on_behalf = ""
+    if affected:
+        if affected.is_reporter:
+            on_behalf = "Myself"
+        else:
+            on_behalf = (
+                f"{affected.first_name} {affected.last_name}".strip()
+            )
+    if not on_behalf and california and california.child_full_name:
+        on_behalf = california.child_full_name
+    if on_behalf:
+        # Every text-field spelling the district specs use.
+        for key in (
+            "on_behalf_of",
+            "on_behalf_of_name",
+            "filing_on_behalf_of",
+            "behalf_of_name",
+            "behalf_of",
+        ):
+            answers[key] = on_behalf
+
     if school:
         answers.update({
             "student_school": school.school_name,
@@ -280,14 +327,17 @@ def known_answers(report):
         })
 
     # Discrimination basis as free text, from the selected options.
-    basis_labels = list(
-        report.option_selections.filter(
+    # A selection's free-text detail ("Other: Anti-Black racism")
+    # carries the reporter's actual claim, so it joins the label.
+    basis_labels = [
+        f"{label}: {other}" if other else label
+        for label, other in report.option_selections.filter(
             option__category__in=[
                 "racism_type",
                 "targeted_identity",
             ],
-        ).values_list("option__label", flat=True)
-    )
+        ).values_list("option__label", "other_text")
+    ]
 
     # The direct questionnaire answer is stored on the report itself,
     # not as an option selection; without this an explicit "yes" would
@@ -318,7 +368,13 @@ def known_answers(report):
 OPTION_TERMS = {
     # tracker option slug -> terms found in district checkbox keys/labels
     "anti_arab_racism": ["arab", "ancestry", "ethnic"],
+    # "Anti-Muslim Hate or Islamophobia" (merged 2026-10-01): union
+    # of the old anti_muslim_hate and racism_or_islamophobia terms.
+    # Not "race"/"racism": historical anti_muslim_hate selections
+    # predate the merge with "Racism or Islamophobia" and must not
+    # pre-check Race on district forms their reporter never claimed.
     "anti_muslim_hate": ["muslim", "religio", "islam"],
+    # Inactive since the merge; kept so historical selections map.
     "racism_or_islamophobia": ["race", "racism", "islam", "religio"],
     "anti_palestinian_racism": [
         "palestin", "national_origin", "national origin", "ancestry",
@@ -404,7 +460,7 @@ def checkbox_prechecks(report, spec_fields):
 # QUESTION PLAN
 # ---------------------------------------------------------------------
 
-def build_plan(report, spec):
+def build_plan(report, spec, cds=None):
     """
     Split the district's fields into what we already have and what we
     still need to ask.
@@ -418,6 +474,31 @@ def build_plan(report, spec):
 
     answers = known_answers(report)
     fields = spec.get("fields", [])
+
+    # Public school address data: fill from the portal's school
+    # lookup when the district form asks for it and the reporter's
+    # answers do not already cover it. Silent on any failure.
+    _SCHOOL_INFO_KEYS = {
+        "school_address": "address",
+        "school_city": "city",
+        "school_zip": "zip",
+    }
+    wanted = [
+        field["key"]
+        for field in fields
+        if field.get("key") in _SCHOOL_INFO_KEYS
+        and not answers.get(field.get("key"))
+    ]
+    if wanted:
+        school = getattr(report, "school_incident", None)
+        info = get_school_info(
+            cds,
+            school.school_name if school else "",
+        )
+        for key in wanted:
+            value = info.get(_SCHOOL_INFO_KEYS[key])
+            if value:
+                answers[key] = value
     checked = checkbox_prechecks(report, fields)
 
     prefilled = []

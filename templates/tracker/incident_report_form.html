@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load crispy_forms_tags %}
+{% load static %}
 
 {% block title %}
     Education Discrimination & Censorship Tracker
@@ -7,26 +8,133 @@
 
 {% block content %}
 
+<style>
+    /* Long checkbox lists render as a responsive grid so the page
+       stays short (matrix layout per the 9.21 questionnaire). */
+    .option-grid div[id^="div_id_"] > div:not(.form-check),
+    .option-grid .option-grid-items {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr));
+        gap: 0 1.5rem;
+    }
+
+    .option-grid.option-grid-single
+        div[id^="div_id_"] > div:not(.form-check),
+    .option-grid.option-grid-single .option-grid-items {
+        grid-template-columns: 1fr;
+    }
+
+    .option-grid .form-check {
+        break-inside: avoid;
+        margin-bottom: 0.5rem;
+    }
+
+    details.info-dropdown {
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        border-radius: 0.375rem;
+        padding: 0.75rem 1rem;
+        margin: 0.75rem 0 1rem;
+        background: var(--bs-tertiary-bg, #f8f9fa);
+    }
+
+    details.info-dropdown summary {
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    details.info-dropdown[open] summary {
+        margin-bottom: 0.5rem;
+    }
+
+    .apr-definitions dt {
+        margin-top: 0.6rem;
+    }
+
+    .org-choice {
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        border-radius: 0.375rem;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .org-choice .org-anonymous {
+        margin-left: 1.75rem;
+        margin-top: 0.25rem;
+    }
+</style>
+
 <div class="mb-4">
+    <div class="d-flex flex-wrap align-items-center gap-4 mb-3">
+        <img
+            src="{% static 'img/aroc-action.png' %}"
+            alt="AROC Action"
+            style="height: 72px; width: auto;"
+        >
+        <img
+            src="{% static 'img/iuapr.png' %}"
+            alt="The Institute for the Understanding of Anti-Palestinian Racism"
+            style="height: 44px; width: auto; max-width: 100%;"
+        >
+        <img
+            src="{% static 'img/k12-legal-defense.png' %}"
+            alt="K-12 Legal Defense — Teach, Learn &amp; Belong"
+            style="height: 72px; width: auto;"
+        >
+    </div>
+
     <h1 class="mb-3">
-        AROC Education Discrimination & Censorship Tracker
+        Discrimination &amp; Censorship Tracker
     </h1>
 
-    <p class="lead">
-        Report an incident of hate, racism, discrimination,
-        censorship, or repression.
+    <p class="fst-italic">
+        Need help filling out this form? Call us at 415-861-7444
+        between 10AM and 5PM PT. A member of our staff can help you
+        fill it out or arrange time to fill it out together.
+    </p>
+
+    <p>
+        This is a national tracker for incidents of hate, racism, or
+        repression against Palestinian, Arab, allied, and other
+        BAMEMSA individuals. It covers schools and other settings
+        across the country. Reporting here helps us fight back
+        against the growing racism and repression facing our
+        communities and our kids.
+    </p>
+
+    <p>
+        AROC Action and researchers from the Institute for
+        Understanding Anti-Palestinian Racism (IUAPR) developed this
+        tool together. We will use it to understand and challenge the
+        many types of discrimination our communities face.
+    </p>
+
+    <p>
+        For individuals in California, this tracker also allows you
+        to choose if you want to submit to statewide incident
+        registries that help us respond to unfair laws and racist
+        trends in California schools and other settings.
+        <strong><em>Californians can also choose if they want to
+        receive direct follow-up support from AROC or legal advisors
+        at K-12 Defense, PalLegal and/or CAIR.</em></strong>
+        <em>This form does not in itself constitute legal
+        advice.</em>
     </p>
 
     <div class="privacy-box">
-        <strong>Privacy and anonymity</strong>
+        <strong>Privacy and Anonymity</strong>
 
         <p class="mb-0 mt-2">
-            Your information will be kept private and confidential.
-            Incident information used for research or public reporting
-            will be anonymized unless you explicitly authorize your
-            story or identifying information to be shared.
+            <strong><em>Nothing you submit will be identified with
+            you and shared anywhere beyond the research team without
+            your permission.</em></strong>
+            <strong><em>When you fill out this form, all of the
+            information is encrypted and kept secure, private, and
+            confidential. Any incident data will be anonymized so
+            that nothing can be traced back to you unless you want
+            to share your story publicly.</em></strong>
         </p>
     </div>
+
 
     <p class="required-note">
         Fields marked with an asterisk are required.
@@ -46,15 +154,21 @@
     {# FORM-WIDE ERRORS #}
     {# ========================================================== #}
 
-    {% if contact_form.non_field_errors %}
-        <div class="alert alert-danger">
-            {{ contact_form.non_field_errors }}
+    {% if error_sections %}
+        <div class="alert alert-danger" id="error-summary">
+            <strong>Your report was not submitted yet.</strong>
+            Please check these parts of the form:
+            <ul class="mb-0">
+                {% for section in error_sections %}
+                    <li>{{ section }}</li>
+                {% endfor %}
+            </ul>
         </div>
     {% endif %}
 
-    {% if affected_person_form.non_field_errors %}
+    {% if contact_form.non_field_errors %}
         <div class="alert alert-danger">
-            {{ affected_person_form.non_field_errors }}
+            {{ contact_form.non_field_errors }}
         </div>
     {% endif %}
 
@@ -102,16 +216,35 @@
 
 
     {# ========================================================== #}
-    {# 1. CONSENT + CONTACT #}
+    {# CONSENT #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>1. Consent and contact information</h2>
+        <h2>Consent</h2>
 
         {{ contact_form.has_consented|as_crispy_field }}
 
-        <hr>
+    </section>
+
+    <p>
+        Read more about how the data is securely collected and
+        stored
+        <a
+            href="{{ data_retention_doc_url }}"
+            target="_blank"
+            rel="noopener"
+        >here</a>.
+    </p>
+
+
+    {# ========================================================== #}
+    {# 1. CONTACT #}
+    {# ========================================================== #}
+
+    <section class="form-section">
+
+        <h2>Contact information</h2>
 
         {{ contact_form.state|as_crispy_field }}
 
@@ -135,45 +268,143 @@
 
 
     {# ========================================================== #}
-    {# 2. AFFECTED PERSON #}
+    {# 2. WHERE SHOULD THIS REPORT GO? #}
     {# ========================================================== #}
 
-    <section class="form-section">
+    <section
+        class="form-section conditional-section"
+        id="referral-section"
+    >
 
-        <h2>2. About the person who experienced the incident</h2>
-
-        <p class="text-muted">
-            Please let us know whether this incident happened to you
-            or whether you are reporting on behalf of someone else.
-        </p>
-
-        {{ affected_person_form.is_reporter|as_crispy_field }}
+        <h2>Where should we report this incident?</h2>
 
         <div
-            id="affected-person-fields"
             class="conditional-section"
+            id="referral-nonca-intro"
         >
-            <div class="row">
-                <div class="col-md-6">
-                    {{ affected_person_form.first_name|as_crispy_field }}
-                </div>
+            <p>
+                If you are seeking support in other states, please
+                opt in to share your information with Palestine
+                Legal and AROC Action. Each submission remains
+                secure and confidential to that organization.
+            </p>
+        </div>
 
-                <div class="col-md-6">
-                    {{ affected_person_form.last_name|as_crispy_field }}
+        <div
+            class="conditional-section"
+            id="referral-ca-intro"
+        >
+            <p>
+                In this form, you can choose to submit your
+                information to multiple organizations in addition to
+                AROC and IUAPR. Each submission remains secure and
+                confidential to that organization. You may want to
+                submit to these organizations for support seeking
+                legal action, but you may also choose to anonymize
+                your information to them for research purposes only:
+            </p>
+        </div>
+
+        <p class="fst-italic">
+            Please note that if you choose to make your information
+            anonymous, you are opting out of any follow-up about
+            your experience.
+        </p>
+
+        {# Doc order for CA: K-12, Palestine Legal, CAIR, AROC. #}
+        {# Palestine Legal is shared with the non-CA block, so the #}
+        {# CA-only orgs wrap it on either side. #}
+
+        <div
+            class="conditional-section"
+            id="referral-ca-orgs"
+        >
+            <div class="org-choice">
+                {{ referral_form.submit_k12_legal|as_crispy_field }}
+
+                <div
+                    class="org-anonymous conditional-section"
+                    id="k12-anonymous"
+                >
+                    {{ referral_form.anonymous_k12_legal|as_crispy_field }}
                 </div>
             </div>
         </div>
+
+        <div class="org-choice">
+            {{ referral_form.submit_pal_legal|as_crispy_field }}
+
+            <div
+                class="org-anonymous conditional-section"
+                id="pal-legal-anonymous"
+            >
+                {{ referral_form.anonymous_pal_legal|as_crispy_field }}
+            </div>
+        </div>
+
+        <div
+            class="conditional-section"
+            id="referral-ca-orgs-2"
+        >
+            <div class="org-choice">
+                {{ referral_form.submit_cair|as_crispy_field }}
+
+                <div
+                    class="org-anonymous conditional-section"
+                    id="cair-anonymous"
+                >
+                    {{ referral_form.anonymous_cair|as_crispy_field }}
+                </div>
+            </div>
+        </div>
+
+        <div class="org-choice">
+            <div class="form-check mb-1">
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    checked
+                    disabled
+                    id="aroc-default"
+                >
+                <label
+                    class="form-check-label"
+                    for="aroc-default"
+                >
+                    Submit to AROC / IUAPR
+                </label>
+            </div>
+
+            <p class="text-muted mb-1 ms-4">
+                Submitting this form shares your report with AROC
+                and IUAPR.
+            </p>
+
+            <div class="org-anonymous">
+                {{ referral_form.aroc_anonymous|as_crispy_field }}
+            </div>
+        </div>
+
+        <p class="mt-3 mb-0">
+            For online hate or repression, we recommend also filling
+            out an incident report with 7amleh:
+            <a
+                href="https://7or.7amleh.org/"
+                target="_blank"
+                rel="noopener"
+            >https://7or.7amleh.org/</a>
+        </p>
 
     </section>
 
 
     {# ========================================================== #}
-    {# 3. BASIC INCIDENT DETAILS #}
+    {# 3. WHAT HAPPENED #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>3. Tell us what happened</h2>
+        <h2>Tell us what happened</h2>
 
         {{ incident_form.date_precision|as_crispy_field }}
 
@@ -196,70 +427,149 @@
 
         {{ incident_form.description|as_crispy_field }}
 
-        <div class="row">
-            <div class="col-md-8">
-                {{ incident_form.city|as_crispy_field }}
-            </div>
+        {{ incident_form.city|as_crispy_field }}
 
-            <div class="col-md-4">
-                {{ incident_form.zip_code|as_crispy_field }}
-            </div>
-        </div>
+        {{ incident_form.zip_code|as_crispy_field }}
 
     </section>
 
 
     {# ========================================================== #}
-    {# 4. INCIDENT TYPE #}
+    {# 4. FORMS OF RACISM + APR #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>4. About the incident</h2>
+        <h2>About the racism involved</h2>
 
-        <h3>
-            Did the incident involve any of these forms of racism?
+        <h3 id="racism-types-heading">
+            Did the incident involve any of these forms of racism?*
         </h3>
 
         <p class="text-muted">
             Select all that apply.
         </p>
 
-        {{ incident_form.racism_types|as_crispy_field }}
+        <div
+            class="option-grid option-grid-single"
+            role="group"
+            aria-labelledby="racism-types-heading"
+        >
+            {{ incident_form.racism_types|as_crispy_field }}
+        </div>
 
-        <hr>
-
-        <h3>Where did the incident take place?</h3>
-
-        <p class="text-muted">
-            Select all that apply.
-        </p>
-
-        {{ incident_form.location_types|as_crispy_field }}
-
-        <hr>
-
-        <h3>What type of incident was it?</h3>
-
-        <p class="text-muted">
-            Select all that apply.
-        </p>
-
-        {{ incident_form.incident_types|as_crispy_field }}
+        <div
+            id="racism-types-other"
+            class="conditional-section"
+        >
+            {{ incident_form.racism_types_other|as_crispy_field }}
+        </div>
 
         <hr>
 
         {{ incident_form.anti_palestinian_racism|as_crispy_field }}
 
-        {{ incident_form.knows_of_other_apr_incidents|as_crispy_field }}
+        <details class="info-dropdown">
+            <summary>
+                What is anti-Palestinian racism?
+            </summary>
 
-        {{ incident_form.similar_incidents|as_crispy_field }}
+            <p class="mb-1">
+                <em>Anti-Palestinian racism is a form of systemic
+                racism that works to silence, exclude, erase,
+                stereotype, defame, or treat Palestinians and their
+                stories as less than human. It shows up in many ways
+                and can include:</em>
+            </p>
+
+            <dl class="apr-definitions mb-0">
+                <dt>Nakba Denial</dt>
+                <dd class="mb-1">
+                    Discrediting the factual basis of Palestinian
+                    expulsion in 1948 and other massacres.
+                </dd>
+
+                <dt>Justifying Violence Against Palestinians</dt>
+                <dd class="mb-1">
+                    E.g. bullying or threatening a student for
+                    wearing a keffiyeh or standing up for
+                    Palestinian rights.
+                </dd>
+
+                <dt>Denying Palestinians are Indigenous to
+                Palestine</dt>
+                <dd class="mb-1">
+                    With their own identity and rights.
+                </dd>
+
+                <dt>Erasing Palestinian Human Rights</dt>
+                <dd class="mb-1">
+                    And their equal dignity and worth, e.g. not
+                    being allowed to talk about what is happening to
+                    Palestinians, related news stories or
+                    experiences.
+                </dd>
+
+                <dt>Excluding Palestinians or Palestinian
+                perspectives</dt>
+                <dd class="mb-1">
+                    And stories, or pressuring others to exclude
+                    them, e.g. not being allowed to join a club or
+                    host an event.
+                </dd>
+
+                <dt>Defaming Palestinians or their allies</dt>
+                <dd class="mb-0">
+                    With slander, such as calling them inherently
+                    anti-semitic, a terrorist threat or supporter,
+                    against democracy, or falsely associating them
+                    with Palestinian political factions.
+                </dd>
+            </dl>
+        </details>
+
+        {{ incident_form.knows_of_other_apr_incidents|as_crispy_field }}
 
     </section>
 
 
     {# ========================================================== #}
-    {# 5. CALIFORNIA SECTION #}
+    {# LOCATION #}
+    {# ========================================================== #}
+
+    <section class="form-section">
+
+        <h2>Where it happened</h2>
+
+        <h3 id="location-types-heading">
+            What kind of location did the incident take place at?*
+        </h3>
+
+        <p class="text-muted">
+            You may select multiple options. If Other, please
+            specify in the box that appears.
+        </p>
+
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="location-types-heading"
+        >
+            {{ incident_form.location_types|as_crispy_field }}
+        </div>
+
+        <div
+            id="location-types-other"
+            class="conditional-section"
+        >
+            {{ incident_form.location_types_other|as_crispy_field }}
+        </div>
+
+    </section>
+
+
+    {# ========================================================== #}
+    {# CALIFORNIA K-12 #}
     {# ========================================================== #}
 
     <section
@@ -267,40 +577,24 @@
         id="california-section"
     >
 
-        <h2>5. California-specific information</h2>
+        <h2>California K&ndash;12</h2>
 
         {{ california_form.is_k12_incident|as_crispy_field }}
 
-        {{ california_form.reporter_role|as_crispy_field }}
-
         <div
-            id="reporter-role-other"
+            id="k12-district-fields"
             class="conditional-section"
         >
-            {{ california_form.reporter_role_other|as_crispy_field }}
-        </div>
+            {{ formal_complaint_form.previously_submitted_to_district|as_crispy_field }}
 
-        <div
-            id="student-fields"
-            class="conditional-section"
-        >
-            {{ california_form.student_date_of_birth|as_crispy_field }}
+            {{ formal_complaint_form.authorize_autopopulation|as_crispy_field }}
         </div>
-
-        <div
-            id="parent-fields"
-            class="conditional-section"
-        >
-            {{ california_form.child_full_name|as_crispy_field }}
-        </div>
-
-        {{ california_form.age|as_crispy_field }}
 
     </section>
 
 
     {# ========================================================== #}
-    {# 6. SCHOOL SECTION #}
+    {# 7. SCHOOL INFORMATION #}
     {# ========================================================== #}
 
     <section
@@ -308,29 +602,11 @@
         id="school-section"
     >
 
-        <h2>6. School information</h2>
+        <h2>School information</h2>
 
-        <div class="row">
-            <div class="col-md-7">
-                {{ school_form.school_name|as_crispy_field }}
-            </div>
+        {{ school_form.school_district|as_crispy_field }}
 
-            <div class="col-md-5">
-                {{ school_form.school_district|as_crispy_field }}
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-md-6">
-                {{ school_form.grade|as_crispy_field }}
-            </div>
-
-            <div class="col-md-6">
-                {{ school_form.principal|as_crispy_field }}
-            </div>
-        </div>
-
-        {{ school_form.location_within_school|as_crispy_field }}
+        {{ school_form.school_name|as_crispy_field }}
 
         {{ school_form.school_type|as_crispy_field }}
 
@@ -341,79 +617,118 @@
             {{ school_form.school_type_other|as_crispy_field }}
         </div>
 
-
-        <hr>
-
-
-        <h3>School response</h3>
-
-        {{ school_form.school_was_aware|as_crispy_field }}
-
+        {# Doc: the role question lives with the school block. The #}
+        {# field is on CaliforniaDetails, so it stays CA-gated. #}
         <div
-            id="school-aware-details"
             class="conditional-section"
+            id="ca-role-section"
         >
-            {{ school_form.concerns_addressed_to|as_crispy_field }}
+            {{ california_form.reporter_role|as_crispy_field }}
 
-            {{ school_form.concerns_addressed_date|as_crispy_field }}
+            <p class="fst-italic">
+                Please note if you are a parent or guardian filling
+                out on behalf of your child, the questions on race,
+                identity, etc. should represent the child.
+            </p>
+
+            <div
+                id="reporter-role-other"
+                class="conditional-section"
+            >
+                {{ california_form.reporter_role_other|as_crispy_field }}
+            </div>
+
+            <div
+                id="student-fields"
+                class="conditional-section"
+            >
+                {{ california_form.student_date_of_birth|as_crispy_field }}
+            </div>
+
+            <div
+                id="parent-fields"
+                class="conditional-section"
+            >
+                {{ california_form.child_full_name|as_crispy_field }}
+            </div>
+
+            <div
+                id="teacher-retaliation-note"
+                class="conditional-section"
+            >
+                <p class="text-muted">
+                    Please note that if you choose to submit an
+                    official complaint through this form, while the
+                    District will maintain your information
+                    confidentially and you are nominally protected
+                    from retaliation by law for filing this
+                    complaint, schools or districts may find other
+                    ways to retaliate.
+                </p>
+            </div>
         </div>
 
-        {{ school_form.teacher_admin_response|as_crispy_field }}
+        {{ school_form.grade|as_crispy_field }}
 
-        {{ school_form.satisfied_with_response|as_crispy_field }}
+        {{ school_form.principal|as_crispy_field }}
 
-        <div
-            id="satisfaction-explanation"
-            class="conditional-section"
-        >
-            {{ school_form.satisfaction_explanation|as_crispy_field }}
-        </div>
-
-        {{ school_form.school_response_effect|as_crispy_field }}
-
-
-        <hr>
-
-
-        <h3>Educational impacts</h3>
-
-        <p class="text-muted">
-            Select all that apply.
-        </p>
-
-        {{ school_form.educational_impacts|as_crispy_field }}
-
-        <div
-            id="absence-frequency"
-            class="conditional-section"
-        >
-            {{ school_form.absence_due_to_racism_frequency|as_crispy_field }}
-        </div>
-
-        {{ school_form.educational_requirement_violated|as_crispy_field }}
-
-
-        <hr>
-
-
-        <h3>Reporting the incident</h3>
-
-        {{ incident_form.previously_reported|as_crispy_field }}
-
-        <div
-            id="nonreport-reasons"
-            class="conditional-section"
-        >
-            {{ school_form.nonreport_reasons|as_crispy_field }}
-        </div>
-
-        {{ incident_form.resolution_steps|as_crispy_field }}
+        {{ school_form.location_within_school|as_crispy_field }}
 
     </section>
 
 
     {# ========================================================== #}
-    {# 7. FORMAL CA K-12 COMPLAINT #}
+    {# 8. INCIDENT TYPE #}
+    {# ========================================================== #}
+
+    <section class="form-section">
+
+        <h2>Type of incident</h2>
+
+        <h3 id="incident-types-heading">What type of incident was it?*</h3>
+
+        <p class="text-muted">
+            Select all that apply.
+        </p>
+
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="incident-types-heading"
+        >
+            {{ incident_form.incident_types|as_crispy_field }}
+        </div>
+
+        <div
+            id="incident-types-other"
+            class="conditional-section"
+        >
+            {{ incident_form.incident_types_other|as_crispy_field }}
+        </div>
+
+    </section>
+
+
+    {# ========================================================== #}
+    {# 9. ATTACHMENTS #}
+    {# ========================================================== #}
+
+    <section class="form-section">
+
+        <h2>Supporting materials</h2>
+
+        <p>
+            Are there photos or documents you would like to include
+            that help explain what happened?
+        </p>
+
+        {{ attachment_form.files|as_crispy_field }}
+
+    </section>
+
+
+    {# ========================================================== #}
+    {# 10. FORMAL CA K-12 COMPLAINT #}
     {# ========================================================== #}
 
     <section
@@ -421,16 +736,9 @@
         id="formal-complaint-section"
     >
 
-        <h2>7. California K–12 complaint</h2>
+        <h2>California K&ndash;12 complaint</h2>
 
-        {{ formal_complaint_form.previously_submitted_to_district|as_crispy_field }}
-
-        {{ formal_complaint_form.authorize_autopopulation|as_crispy_field }}
-
-        <div
-            id="formal-complaint-details"
-            class="conditional-section"
-        >
+        <div id="formal-complaint-details">
 
             {{ formal_complaint_form.complaint_against|as_crispy_field }}
 
@@ -454,34 +762,190 @@
 
 
     {# ========================================================== #}
-    {# 8. EXPERIENCES + IMPACTS #}
+    {# 12. EDUCATIONAL REQUIREMENTS (SCHOOL) #}
+    {# ========================================================== #}
+
+    <section
+        class="form-section conditional-section"
+        id="school-followup-1"
+    >
+
+        <h2>Educational requirements</h2>
+
+        {{ school_form.educational_requirement_violated|as_crispy_field }}
+
+    </section>
+
+
+    {# ========================================================== #}
+    {# 13. REPORTING + RESOLUTION #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>8. Experiences and impacts</h2>
+        <h2>Reporting the incident</h2>
 
-        <h3>
-            What forms of discrimination or repression did you experience?
-        </h3>
+        <div
+            id="nonca-reported"
+            class="conditional-section"
+        >
+            {{ incident_form.previously_reported|as_crispy_field }}
+        </div>
 
-        <p class="text-muted">
-            Select all that apply.
-        </p>
+        {{ incident_form.resolution_steps|as_crispy_field }}
 
-        {{ demographics_form.discrimination_experiences|as_crispy_field }}
+    </section>
+
+
+    {# ========================================================== #}
+    {# 14. SCHOOL RESPONSE + IMPACTS (SCHOOL) #}
+    {# ========================================================== #}
+
+    <section
+        class="form-section conditional-section"
+        id="school-followup-2"
+    >
+
+        <h2>School response and impacts</h2>
+
+        {{ school_form.school_was_aware|as_crispy_field }}
+
+        <div
+            id="school-aware-details"
+            class="conditional-section"
+        >
+            {{ school_form.concerns_addressed_to|as_crispy_field }}
+
+            {{ school_form.concerns_addressed_date|as_crispy_field }}
+        </div>
+
+        {{ school_form.teacher_admin_response|as_crispy_field }}
+
+        {{ school_form.satisfied_with_response|as_crispy_field }}
+
+        <div
+            id="satisfaction-explanation"
+            class="conditional-section"
+        >
+            {{ school_form.satisfaction_explanation|as_crispy_field }}
+        </div>
+
 
         <hr>
 
-        <h3>
-            What impacts did this have on your well-being?
+
+        <h3 id="educational-impacts-heading">
+            Educational impacts: What were the impacts of this
+            incident on your experience in school?
         </h3>
 
         <p class="text-muted">
             Select all that apply.
         </p>
 
-        {{ demographics_form.wellbeing_impacts|as_crispy_field }}
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="educational-impacts-heading"
+        >
+            {{ school_form.educational_impacts|as_crispy_field }}
+        </div>
+
+        <div
+            id="absence-frequency"
+            class="conditional-section"
+        >
+            {{ school_form.absence_due_to_racism_frequency|as_crispy_field }}
+        </div>
+
+
+        <hr>
+
+
+        <div
+            id="nonreport-reasons"
+            class="conditional-section option-grid"
+        >
+            {{ school_form.nonreport_reasons|as_crispy_field }}
+        </div>
+
+        <div
+            id="nonreport-reasons-other"
+            class="conditional-section"
+        >
+            {{ school_form.nonreport_reasons_other|as_crispy_field }}
+        </div>
+
+        {{ school_form.school_response_effect|as_crispy_field }}
+
+    </section>
+
+
+    {# ========================================================== #}
+    {# 15. EXPERIENCES + IMPACTS #}
+    {# ========================================================== #}
+
+    <section class="form-section">
+
+        <h2>Experiences and impacts</h2>
+
+        <h3 id="discrimination-experiences-heading">
+            In this or other instances, did you experience any of
+            the following?
+        </h3>
+
+        <p class="text-muted">
+            Related to your ethnicity, race, or nationality; your
+            association with people of a particular race, ethnicity,
+            or nationality; or your respect for Palestinian human
+            rights. Select all that apply.
+        </p>
+
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="discrimination-experiences-heading"
+        >
+            {{ demographics_form.discrimination_experiences|as_crispy_field }}
+        </div>
+
+        <div
+            id="discrimination-experiences-other"
+            class="conditional-section"
+        >
+            {{ demographics_form.discrimination_experiences_other|as_crispy_field }}
+        </div>
+
+        <hr>
+
+        {{ incident_form.similar_incidents|as_crispy_field }}
+
+        <hr>
+
+        <h3 id="wellbeing-impacts-heading">
+            Regarding your personal well-being and health, what
+            impacts did you experience as a result of this incident?
+        </h3>
+
+        <p class="text-muted">
+            For example, anxiety, headaches, hypervigilance,
+            self-doubt, etc. Select all that apply.
+        </p>
+
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="wellbeing-impacts-heading"
+        >
+            {{ demographics_form.wellbeing_impacts|as_crispy_field }}
+        </div>
+
+        <div
+            id="wellbeing-impacts-other"
+            class="conditional-section"
+        >
+            {{ demographics_form.wellbeing_impacts_other|as_crispy_field }}
+        </div>
 
         <hr>
 
@@ -491,12 +955,12 @@
 
 
     {# ========================================================== #}
-    {# 9. DEMOGRAPHICS #}
+    {# 16. DEMOGRAPHICS #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>9. Identity and demographics</h2>
+        <h2>Identity and demographics</h2>
 
         <p class="text-muted">
             If you are filling this form out on behalf of someone
@@ -504,36 +968,28 @@
             experienced the incident.
         </p>
 
-        <h3>
-            What aspects of identity may have been targeted?
+        <h3 id="targeted-identities-heading">
+            If any, what aspects of your identity do you believe may
+            have been targeted in this incident?*
         </h3>
 
         <p class="text-muted">
             Select all that apply.
         </p>
 
-        {{ demographics_form.targeted_identities|as_crispy_field }}
-
-
-        <hr>
-
-
-        <h3>Race and/or ethnicity</h3>
-
-        <p class="text-muted">
-            Choose up to three.
-        </p>
-
-        {{ demographics_form.race_ethnicity|as_crispy_field }}
-
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="targeted-identities-heading"
+        >
+            {{ demographics_form.targeted_identities|as_crispy_field }}
+        </div>
 
         <div
-            id="arab-palestinian-section"
-            class="conditional-section mt-4"
+            id="targeted-identities-other"
+            class="conditional-section"
         >
-            <h3>Arab / Palestinian identity</h3>
-
-            {{ demographics_form.arab_palestinian_identity|as_crispy_field }}
+            {{ demographics_form.targeted_identities_other|as_crispy_field }}
         </div>
 
 
@@ -550,6 +1006,47 @@
         </div>
 
 
+        <hr>
+
+
+        <h3 id="race-ethnicity-heading">What is your race and/or ethnicity?*</h3>
+
+        <p class="text-muted">
+            Choose up to three representing the ones you most
+            identify with.
+        </p>
+
+        <div
+            class="option-grid"
+            role="group"
+            aria-labelledby="race-ethnicity-heading"
+        >
+            {{ demographics_form.race_ethnicity|as_crispy_field }}
+        </div>
+
+
+        <div
+            id="arab-palestinian-section"
+            class="conditional-section mt-4"
+        >
+            <h3 id="arab-palestinian-heading">Do you identify as Arab or Palestinian?*</h3>
+
+            <p class="text-muted">
+                Check all that apply.
+            </p>
+
+            <div
+                role="group"
+                aria-labelledby="arab-palestinian-heading"
+            >
+                {{ demographics_form.arab_palestinian_identity|as_crispy_field }}
+            </div>
+        </div>
+
+
+        <hr>
+
+
         {{ demographics_form.religion|as_crispy_field }}
 
         <div
@@ -560,93 +1057,46 @@
         </div>
 
 
+        <div
+            id="ca-age"
+            class="conditional-section"
+        >
+            {{ california_form.age|as_crispy_field }}
+        </div>
+
+
         {{ final_form.other_identity_information|as_crispy_field }}
 
     </section>
 
 
     {# ========================================================== #}
-    {# 10. CALIFORNIA REFERRALS #}
-    {# ========================================================== #}
-
-    <section
-        class="form-section conditional-section"
-        id="referral-section"
-    >
-
-        <h2>10. California referrals and support</h2>
-
-        <p>
-            You may choose to have this incident shared with
-            organizations that can provide support or legal assistance.
-        </p>
-
-        {{ referral_form.organizations|as_crispy_field }}
-
-
-        <hr>
-
-
-        <h3>Anonymous submissions</h3>
-
-        <p class="text-muted">
-            If you select an organization below, your incident
-            information will be shared anonymously and you will not
-            receive individual follow-up from that organization.
-        </p>
-
-        {{ referral_form.anonymous_organizations|as_crispy_field }}
-
-        {{ final_form.support_sought_elsewhere|as_crispy_field }}
-
-    </section>
-
-
-    {# ========================================================== #}
-    {# 11. ATTACHMENTS #}
+    {# 17. FINAL INFORMATION #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>11. Supporting materials</h2>
-
-        <p>
-            Are there photos or documents you would like to include
-            that help explain what happened?
-        </p>
-
-        {{ attachment_form.files|as_crispy_field }}
-
-    </section>
-
-
-    {# ========================================================== #}
-    {# 12. FINAL INFORMATION #}
-    {# ========================================================== #}
-
-    <section class="form-section">
-
-        <h2>12. Anything else?</h2>
+        <h2>Anything else?</h2>
 
         {{ final_form.additional_information|as_crispy_field }}
 
         <div
-            id="non-ca-followup"
+            id="ca-support-question"
             class="conditional-section"
         >
-            {{ final_form.opt_out_of_followup|as_crispy_field }}
+            {{ final_form.support_sought_elsewhere|as_crispy_field }}
         </div>
 
     </section>
 
 
     {# ========================================================== #}
-    {# 13. SIGNATURE #}
+    {# 18. SIGNATURE #}
     {# ========================================================== #}
 
     <section class="form-section">
 
-        <h2>13. Signature</h2>
+        <h2>Signature</h2>
 
         <p>
             By typing your name below, you confirm that the information
@@ -664,6 +1114,19 @@
                 {{ final_form.signature_date|as_crispy_field }}
             </div>
         </div>
+
+        <div
+            id="nonca-optout"
+            class="conditional-section"
+        >
+            {{ final_form.opt_out_of_followup|as_crispy_field }}
+        </div>
+
+        {% if final_form.captcha %}
+            <div class="mt-3">
+                {{ final_form.captcha|as_crispy_field }}
+            </div>
+        {% endif %}
 
     </section>
 
@@ -750,25 +1213,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     /*
      * ----------------------------------------------------------
-     * AFFECTED PERSON
-     * ----------------------------------------------------------
-     */
-
-    function updateAffectedPerson() {
-
-        const isReporter = checkedValue(
-            "affected-is_reporter"
-        );
-
-        setVisible(
-            "affected-person-fields",
-            isReporter === "False"
-        );
-    }
-
-
-    /*
-     * ----------------------------------------------------------
      * INCIDENT DATE
      * ----------------------------------------------------------
      */
@@ -804,23 +1248,95 @@ document.addEventListener("DOMContentLoaded", function () {
         );
 
         const isCalifornia = state === "CA";
+        const hasState = state !== "";
 
         setVisible(
             "california-section",
             isCalifornia
         );
 
+        // Every state gets the organization block; which
+        // organizations it offers depends on the state.
         setVisible(
             "referral-section",
+            hasState
+        );
+
+        setVisible(
+            "referral-ca-intro",
             isCalifornia
         );
 
         setVisible(
-            "non-ca-followup",
-            !isCalifornia
+            "referral-ca-orgs",
+            isCalifornia
+        );
+
+        setVisible(
+            "referral-ca-orgs-2",
+            isCalifornia
+        );
+
+        setVisible(
+            "referral-nonca-intro",
+            hasState && !isCalifornia
+        );
+
+        setVisible(
+            "ca-support-question",
+            isCalifornia
+        );
+
+        setVisible(
+            "ca-role-section",
+            isCalifornia
+        );
+
+        setVisible(
+            "ca-age",
+            isCalifornia
+        );
+
+        // nonca-reported is handled in updateReported(), which
+        // also covers CA reporters outside the K-12 district path.
+
+        setVisible(
+            "nonca-optout",
+            hasState && !isCalifornia
         );
 
         return isCalifornia;
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * REFERRAL ANONYMIZE SUB-OPTIONS
+     * ----------------------------------------------------------
+     */
+
+    function isChecked(id) {
+        const el = document.getElementById(id);
+        return !!(el && el.checked);
+    }
+
+
+    function updateReferrals() {
+
+        setVisible(
+            "k12-anonymous",
+            isChecked("id_referral-submit_k12_legal")
+        );
+
+        setVisible(
+            "cair-anonymous",
+            isChecked("id_referral-submit_cair")
+        );
+
+        setVisible(
+            "pal-legal-anonymous",
+            isChecked("id_referral-submit_pal_legal")
+        );
     }
 
 
@@ -850,6 +1366,146 @@ document.addEventListener("DOMContentLoaded", function () {
             "reporter-role-other",
             role === "other"
         );
+
+        setVisible(
+            "teacher-retaliation-note",
+            role === "teacher"
+        );
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * PHONE: REQUIRED OUTSIDE CALIFORNIA
+     * ----------------------------------------------------------
+     */
+
+    /*
+     * Required-mark helper: crispy adds the asterisk server-side
+     * when a field is required on a bound form; these keep the
+     * label honest live as the path changes.
+     */
+
+    function setStar(inputId, on) {
+        const label = document.querySelector(
+            'label[for="' + inputId + '"]'
+        );
+
+        if (!label) {
+            return;
+        }
+
+        const existing = label.querySelector(".asteriskField");
+        const hasTextStar = label.textContent.trim().endsWith("*");
+
+        if (on && !existing && !hasTextStar) {
+            const span = document.createElement("span");
+            span.className = "asteriskField";
+            span.textContent = "*";
+            label.appendChild(span);
+        }
+
+        if (!on && existing) {
+            existing.remove();
+        }
+    }
+
+
+    function updateRequiredMarks() {
+
+        const state = value("id_contact-state");
+        const isCalifornia = state === "CA";
+
+        const isK12 = checkedValue(
+            "california-is_k12_incident"
+        ) === "True";
+
+        const schoolLocation = checkboxWithLabelContains(
+            "incident-location_types",
+            "school"
+        );
+
+        // Only required (and only visible) on their own paths;
+        // star whenever shown.
+        [
+            "id_california-reporter_role",
+            "id_california-reporter_role_other",
+            "id_california-student_date_of_birth",
+            "id_california-child_full_name",
+            "id_school-grade",
+            "id_school-principal",
+            "id_school-location_within_school",
+            "id_school-educational_requirement_violated",
+            // Formal complaint details: the section only shows once
+            // the reporter authorizes the district complaint, and
+            // all of these are doc-starred and required then.
+            "id_formal-complaint_against",
+            "id_formal-individuals_involved",
+            "id_formal-witnesses",
+            "id_formal-requested_remedy",
+            "id_formal-complainant_address",
+        ].forEach(function (id) {
+            setStar(id, true);
+        });
+
+        // Radio group: the label is not tied to one input id.
+        const discussedGroup = document.querySelector(
+            "#div_id_formal-discussed_with_principal_or_supervisor > label"
+        );
+        if (
+            discussedGroup &&
+            !discussedGroup.querySelector(".asteriskField")
+        ) {
+            const span = document.createElement("span");
+            span.className = "asteriskField";
+            span.textContent = "*";
+            discussedGroup.appendChild(span);
+        }
+
+        setStar("id_school-school_name", schoolLocation);
+        setStar("id_school-school_type", schoolLocation);
+        setStar(
+            "id_school-school_district",
+            isCalifornia && isK12
+        );
+    }
+
+
+    function updatePhoneRequired() {
+
+        const state = value("id_contact-state");
+
+        const phone = document.getElementById("id_contact-phone");
+
+        if (!phone) {
+            return;
+        }
+
+        const required = !!state && state !== "CA";
+
+        phone.required = required;
+
+        const label = document.querySelector(
+            'label[for="id_contact-phone"]'
+        );
+
+        if (label) {
+            label.textContent = required ? "Phone*" : "Phone";
+        }
+
+        const cityLabel = document.querySelector(
+            'label[for="id_incident-city"]'
+        );
+
+        if (cityLabel) {
+            // City is doc-starred for California only.
+            cityLabel.textContent = (
+                state === "CA"
+                    ? "In what California city did the incident " +
+                      "take place?*"
+                    : "In what city did the incident take place?"
+            );
+        }
     }
 
 
@@ -883,9 +1539,20 @@ document.addEventListener("DOMContentLoaded", function () {
         );
 
         setVisible(
-            "formal-complaint-section",
+            "school-followup-1",
+            showSchool
+        );
+
+        setVisible(
+            "school-followup-2",
+            showSchool
+        );
+
+        setVisible(
+            "k12-district-fields",
             isCalifornia && isK12
         );
+
     }
 
 
@@ -960,9 +1627,33 @@ document.addEventListener("DOMContentLoaded", function () {
             "incident-previously_reported"
         );
 
+        const districtReported = checkedValue(
+            "formal-previously_submitted_to_district"
+        );
+
+        const state = value("id_contact-state");
+        const isCalifornia = state === "CA";
+
+        const isK12 = checkedValue(
+            "california-is_k12_incident"
+        ) === "True";
+
+        // The district-complaint question only exists on the CA
+        // K-12 path; everyone else gets the general question.
+        const districtApplies = isCalifornia && isK12;
+
+        setVisible(
+            "nonca-reported",
+            state !== "" && !districtApplies
+        );
+
+        const show = districtApplies
+            ? districtReported === "False"
+            : reported === "False";
+
         setVisible(
             "nonreport-reasons",
-            reported === "False"
+            show
         );
     }
 
@@ -975,13 +1666,19 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function updateFormalComplaint() {
 
+        const isCalifornia = value("id_contact-state") === "CA";
+
+        const isK12 = checkedValue(
+            "california-is_k12_incident"
+        ) === "True";
+
         const authorized = checkedValue(
             "formal-authorize_autopopulation"
         );
 
         setVisible(
-            "formal-complaint-details",
-            authorized === "True"
+            "formal-complaint-section",
+            isCalifornia && isK12 && authorized === "True"
         );
     }
 
@@ -1060,9 +1757,87 @@ document.addEventListener("DOMContentLoaded", function () {
      * ----------------------------------------------------------
      */
 
+    function checkboxWithLabelIs(name, text) {
+        const inputs = document.querySelectorAll(
+            `input[name="${name}"]`
+        );
+
+        text = text.toLowerCase();
+
+        for (const input of inputs) {
+
+            if (!input.checked) {
+                continue;
+            }
+
+            const label = document.querySelector(
+                `label[for="${input.id}"]`
+            );
+
+            if (
+                label &&
+                label.textContent.trim().toLowerCase() === text
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * "OTHER" FREE-TEXT BOXES
+     * ----------------------------------------------------------
+     *
+     * Each pair is [checkbox group name, section id]. The box
+     * shows only while that group's "Other" option is checked.
+     * Exact label match: some options merely contain the word
+     * "other" ("Worsening of other health conditions").
+     */
+
+    const OTHER_TEXT_SECTIONS = [
+        ["incident-racism_types", "racism-types-other"],
+        ["incident-location_types", "location-types-other"],
+        ["incident-incident_types", "incident-types-other"],
+        ["school-nonreport_reasons", "nonreport-reasons-other"],
+        [
+            "demographics-targeted_identities",
+            "targeted-identities-other"
+        ],
+        [
+            "demographics-discrimination_experiences",
+            "discrimination-experiences-other"
+        ],
+        [
+            "demographics-wellbeing_impacts",
+            "wellbeing-impacts-other"
+        ],
+    ];
+
+
+    function updateOtherTexts() {
+
+        for (const [name, id] of OTHER_TEXT_SECTIONS) {
+            setVisible(
+                id,
+                checkboxWithLabelIs(name, "other")
+            );
+        }
+    }
+
+
     function updateAbsenceFrequency() {
 
+        // The 9.21 questionnaire keys this on "avoid school";
+        // "miss school" is kept too since the question asks about
+        // missing school.
         const missedSchool =
+            checkboxWithLabelContains(
+                "school-educational_impacts",
+                "avoid school"
+            ) ||
             checkboxWithLabelContains(
                 "school-educational_impacts",
                 "miss school"
@@ -1083,11 +1858,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function updateAll() {
 
-        updateAffectedPerson();
-
         updateDateFields();
 
         updateCalifornia();
+
+        updatePhoneRequired();
+
+        updateRequiredMarks();
 
         updateReporterRole();
 
@@ -1110,6 +1887,10 @@ document.addEventListener("DOMContentLoaded", function () {
         updateArabPalestinian();
 
         updateAbsenceFrequency();
+
+        updateOtherTexts();
+
+        updateReferrals();
     }
 
 
@@ -1131,6 +1912,38 @@ document.addEventListener("DOMContentLoaded", function () {
      */
 
     updateAll();
+
+
+    /*
+     * ----------------------------------------------------------
+     * AFTER A FAILED SUBMIT: TAKE THE REPORTER TO THE PROBLEM
+     * ----------------------------------------------------------
+     *
+     * Runs after updateAll() so conditional visibility is settled;
+     * scrolls to the first VISIBLE invalid field, falling back to
+     * the error summary at the top.
+     */
+
+    const firstInvalid = Array.from(
+        document.querySelectorAll(".is-invalid")
+    ).find(
+        (el) => el.getClientRects().length > 0
+    );
+
+    const scrollTarget =
+        firstInvalid ||
+        document.getElementById("error-summary");
+
+    if (scrollTarget) {
+        scrollTarget.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+        });
+
+        if (firstInvalid && firstInvalid.focus) {
+            firstInvalid.focus({ preventScroll: true });
+        }
+    }
 
 });
 </script>
