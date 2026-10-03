@@ -660,6 +660,7 @@ import logging
 from urllib.parse import quote
 
 from django.conf import settings
+from django.core.mail import EmailMessage
 from django.http import HttpResponse
 
 from . import ucp
@@ -703,6 +704,47 @@ def _district_mailto(district_name, report):
     return (
         "mailto:?subject=" + quote(subject) + "&body=" + quote(body)
     )
+
+
+def _email_complaint(report, district_name, filename, pdf):
+    """
+    Send the completed complaint to the REPORTER, from the tracker,
+    with Reply-To set to them. Only runs when
+    settings.UCP_EMAIL_DELIVERY is on (real Postmark key + verified
+    sender domain in the deploy env). The PDF is attached and
+    discarded; nothing is stored server-side.
+    """
+
+    message = EmailMessage(
+        subject=(
+            "Your completed UCP complaint — " + district_name
+        ),
+        body=(
+            f"Salaam {report.first_name},\n\n"
+            "Attached is your completed Uniform Complaint "
+            f"Procedures (UCP) complaint for {district_name}.\n\n"
+            "To file it:\n"
+            "1. Review the attached PDF — your typed name and date "
+            "serve as your signature.\n"
+            "2. Email it to your district office, addressed to the "
+            "UCP Compliance Officer, or print and deliver it.\n"
+            "3. The district must investigate and send you a "
+            "written decision within 60 days. Discrimination, "
+            "harassment, intimidation, or bullying complaints must "
+            "be filed within 6 months of the conduct or of first "
+            "learning of it.\n\n"
+            "If you need help, call us at 415-861-7444 "
+            "(10AM-5PM PT).\n\n"
+            "AROC Action & IUAPR\n"
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[report.email],
+        reply_to=[report.email],
+    )
+
+    message.attach(filename, pdf, "application/pdf")
+
+    message.send(fail_silently=False)
 
 
 def _submitted_report(uuid):
@@ -788,6 +830,39 @@ def ucp_offer(request, uuid):
             else:
                 answers.pop(field["key"], None)
 
+        wants_email = (
+            settings.UCP_EMAIL_DELIVERY
+            and request.POST.get("deliver") == "email"
+            and bool(report.email)
+        )
+
+        if wants_email:
+            # Refreshes/double-clicks must not resend, and cycling
+            # districts must not turn one report into a mail cannon
+            # (codex round 5 + system audit): re-render the
+            # confirmation instead.
+            emailed = request.session.get("ucp_emailed", [])
+            emailed_key = f"{report.uuid}:{cds}"
+            report_sends = [
+                key for key in emailed
+                if key.startswith(f"{report.uuid}:")
+            ]
+            district_name = spec.get("name", "your school district")
+
+            if emailed_key in emailed or len(report_sends) >= 3:
+                return render(
+                    request,
+                    "tracker/ucp_emailed.html",
+                    {
+                        "report": report,
+                        "district_name": district_name,
+                        "mailto": _district_mailto(
+                            district_name, report
+                        ),
+                        "capped": emailed_key not in emailed,
+                    },
+                )
+
         try:
             pdf = ucp.generate_pdf(cds, answers)
 
@@ -821,6 +896,36 @@ def ucp_offer(request, uuid):
         )
 
         filename = f"UCP Complaint - {safe_name}.pdf"
+
+        if wants_email:
+            try:
+                _email_complaint(
+                    report, district_name, filename, pdf
+                )
+
+            except Exception:
+                # Send failure must not lose the complaint: stream
+                # the download instead.
+                logger.exception("UCP complaint email failed")
+
+            else:
+                emailed = request.session.get("ucp_emailed", [])
+
+                if emailed_key not in emailed:
+                    emailed.append(emailed_key)
+                    request.session["ucp_emailed"] = emailed[-10:]
+
+                return render(
+                    request,
+                    "tracker/ucp_emailed.html",
+                    {
+                        "report": report,
+                        "district_name": district_name,
+                        "mailto": _district_mailto(
+                            district_name, report
+                        ),
+                    },
+                )
 
         response = HttpResponse(
             pdf,
@@ -864,6 +969,7 @@ def ucp_offer(request, uuid):
                 "prefilled": plan["prefilled"],
                 "followups": plan["followups"],
                 "checkbox_fields": plan["checkbox_fields"],
+                "email_delivery": settings.UCP_EMAIL_DELIVERY,
                 "district_name": spec.get(
                     "name", "your school district"
                 ),

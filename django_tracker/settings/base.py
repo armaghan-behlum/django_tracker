@@ -209,6 +209,13 @@ DATA_RETENTION_DOC_URL = os.environ.get(
 # Service that holds per-district Uniform Complaint Procedures form
 # specs and fills the district's official PDF. Used by the post-submit
 # hand-off page (tracker.ucp).
+# Server-sent complaint email is opt-in. A dedicated flag, not
+# key-presence: POSTMARK_API_KEY is a required env in every deploy
+# and holds placeholders in dev/staging, so its presence proves
+# nothing. The admin flips UCP_EMAIL_DELIVERY=1 alongside the real
+# Postmark key and a verified sender domain.
+UCP_EMAIL_DELIVERY = os.environ.get("UCP_EMAIL_DELIVERY", "") == "1"
+
 UCP_PORTAL_URL = os.environ.get(
     "UCP_PORTAL_URL",
     "https://ucp-complaint-helper-production.up.railway.app",

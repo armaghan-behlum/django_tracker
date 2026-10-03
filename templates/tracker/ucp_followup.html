@@ -158,10 +158,25 @@
             <h3 class="h6">Step 1 — Download your complaint</h3>
             <button
                 type="submit"
+                name="deliver"
+                value="download"
                 class="btn btn-primary btn-lg"
             >
                 Download my completed complaint (PDF)
             </button>
+
+            {% if email_delivery %}
+                <div class="mt-2">
+                    <button
+                        type="submit"
+                        name="deliver"
+                        value="email"
+                        class="btn btn-outline-primary"
+                    >
+                        Or have us email it to you
+                    </button>
+                </div>
+            {% endif %}
         </div>
 
         <div class="mb-3">
