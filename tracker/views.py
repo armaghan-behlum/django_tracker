@@ -140,6 +140,7 @@ def incident_report_create(request):
             request.POST,
             prefix="final",
             school_location=school_location,
+            captcha_remote_ip=request.META.get("REMOTE_ADDR"),
         )
 
         final_valid = final_form.is_valid()
