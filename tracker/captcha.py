@@ -14,6 +14,7 @@ Settings (both read from the environment in settings/base.py):
 
 import http.client
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -62,6 +63,11 @@ class HCaptchaField(forms.Field):
         super().__init__(**kwargs)
         self.remote_ip = remote_ip
 
+    # hCaptcha tokens are dot-separated base64url segments; anything
+    # else is junk we reject locally instead of spending a verify
+    # round-trip (and a held worker) on it.
+    TOKEN_RX = re.compile(r"^[A-Za-z0-9._-]{20,6144}$")
+
     def validate(self, value):
         if not value:
             raise forms.ValidationError(
@@ -69,9 +75,19 @@ class HCaptchaField(forms.Field):
                 code="required",
             )
 
+        if not isinstance(value, str) or not self.TOKEN_RX.match(value):
+            raise forms.ValidationError(
+                "hCaptcha could not be verified.",
+                code="invalid_hcaptcha",
+            )
+
         payload = {
             "secret": settings.HCAPTCHA_SECRET,
             "response": value,
+            # Bind verification to our own site key so a token solved
+            # against another sitekey on the same account cannot be
+            # redeemed here.
+            "sitekey": settings.HCAPTCHA_KEY,
         }
 
         if self.remote_ip:
@@ -84,7 +100,7 @@ class HCaptchaField(forms.Field):
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=8) as response:
+            with urllib.request.urlopen(request, timeout=5) as response:
                 result = json.load(response)
 
             if not isinstance(result, dict):
@@ -99,7 +115,9 @@ class HCaptchaField(forms.Field):
                 code="error_hcaptcha",
             ) from exc
 
-        if not result.get("success"):
+        # Strictly "is True": a degraded verifier returning truthy
+        # junk ("false", 1, [..]) must not count as a pass.
+        if result.get("success") is not True:
             raise forms.ValidationError(
                 "hCaptcha could not be verified.",
                 code="invalid_hcaptcha",
