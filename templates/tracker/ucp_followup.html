@@ -144,38 +144,114 @@
 
     <div class="form-section">
 
-        <div class="d-flex flex-wrap gap-2">
-            <button
-                type="submit"
-                name="deliver"
-                value="email"
-                class="btn btn-primary btn-lg"
-            >
-                Email me my completed complaint
-            </button>
+        <h2>File it with your district</h2>
 
-            <button
-                type="submit"
-                name="deliver"
-                value="download"
-                class="btn btn-outline-primary btn-lg"
-            >
-                Download the PDF
-            </button>
-        </div>
-
-        <p class="required-note mt-3 mb-0">
-            Your typed name and date count as your signature. Send
-            the PDF to the district office by email, addressed to
-            the UCP Compliance Officer, or print and deliver it.
-            The district must send you a written decision within
-            60 days. Discrimination, harassment, intimidation, or
+        <p class="required-note">
+            Your typed name and date count as your signature. The
+            district must send you a written decision within 60
+            days. Discrimination, harassment, intimidation, or
             bullying complaints must be filed within 6 months of
             the conduct or of first learning of it.
         </p>
 
+        <div class="mb-3">
+            <h3 class="h6">Step 1 — Download your complaint</h3>
+            <button
+                type="submit"
+                class="btn btn-primary btn-lg"
+            >
+                Download my completed complaint (PDF)
+            </button>
+        </div>
+
+        <div class="mb-3">
+            <h3 class="h6">Step 2 — Email it to your district</h3>
+            <p class="required-note mb-2">
+                Send it from your own email, addressed to the UCP
+                Compliance Officer at the district office, with the
+                downloaded PDF attached &mdash; or print and
+                deliver it.
+            </p>
+            <a
+                href="{{ mailto }}"
+                class="btn btn-outline-primary"
+            >
+                Open an email draft to your district
+            </a>
+        </div>
+
+        <div class="mb-1">
+            <h3 class="h6">
+                Step 3 &mdash; Or copy the message text
+            </h3>
+            <p class="required-note mb-2">
+                If the button above does not open your email app,
+                copy this and paste it into a new email. Remember
+                to attach the PDF.
+            </p>
+
+            <div
+                id="district-email-text"
+                class="border rounded p-3 bg-light"
+                style="white-space: pre-wrap; user-select: all;"
+            >Subject: {{ email_subject }}
+
+{{ email_body }}</div>
+
+            <button
+                type="button"
+                id="copy-email-text"
+                class="btn btn-outline-secondary btn-sm mt-2"
+            >
+                Copy text
+            </button>
+        </div>
+
     </div>
 
 </form>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var btn = document.getElementById("copy-email-text");
+    var block = document.getElementById("district-email-text");
+
+    if (!btn || !block) {
+        return;
+    }
+
+    function selectBlock() {
+        var range = document.createRange();
+        range.selectNodeContents(block);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    }
+
+    btn.addEventListener("click", function () {
+        var text = block.innerText;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(
+                function () {
+                    btn.textContent = "Copied";
+                    setTimeout(function () {
+                        btn.textContent = "Copy text";
+                    }, 2000);
+                },
+                function () {
+                    selectBlock();
+                    btn.textContent =
+                        "Press \u2318C / Ctrl+C to copy";
+                }
+            );
+        } else {
+            selectBlock();
+            btn.textContent = "Press \u2318C / Ctrl+C to copy";
+        }
+    });
+});
+</script>
+
 
 {% endblock %}
