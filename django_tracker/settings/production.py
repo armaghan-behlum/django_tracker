@@ -1,6 +1,9 @@
 from .base import *
 
-DEBUG = get_env_variable('DEBUG')
+# get_env_variable returns a STRING; any non-empty value (including
+# "False") is truthy, which turned debug pages on in production and
+# exposed tracebacks, settings, and submitted data on errors.
+DEBUG = get_env_variable('DEBUG') == 'True'
 
 ALLOWED_HOSTS = ['tracker.arocaction.org', 
     'www.arocaction.org', 'arocaction.org', 
