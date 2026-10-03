@@ -38,7 +38,6 @@ from .models import (
 
 # Whitelisted IncidentReport fields for the coordinator surface.
 NON_PII_REPORT_FIELDS = [
-    "uuid",
     "status",
     "submitted_at",
     "state",
@@ -74,7 +73,7 @@ assert not (
 @admin.register(DeidentifiedReport)
 class DeidentifiedReportAdmin(admin.ModelAdmin):
     list_display = [
-        "uuid",
+        "id",
         "status",
         "state",
         "city",
@@ -82,8 +81,22 @@ class DeidentifiedReportAdmin(admin.ModelAdmin):
         "deidentified",
     ]
     list_filter = ["status", "state", "anti_palestinian_racism"]
-    search_fields = ["uuid", "city", "zip_code", "description"]
+    search_fields = ["city", "zip_code", "description"]
     ordering = ["-submitted_at"]
+
+    # Django accepts arbitrary local-field lookups in the changelist
+    # query string by default, which let hidden identifiers be
+    # queried (?email__exact=..., codex round 5 #2). Only the
+    # whitelisted filters may be used.
+    _ALLOWED_LOOKUPS = {
+        "status", "status__exact",
+        "state", "state__exact",
+        "anti_palestinian_racism",
+        "anti_palestinian_racism__exact",
+    }
+
+    def lookup_allowed(self, lookup, value, request=None):
+        return lookup in self._ALLOWED_LOOKUPS
 
     readonly_fields = NON_PII_REPORT_FIELDS + [
         "deidentified",
@@ -273,18 +286,17 @@ class UCPFilingInline(admin.TabularInline):
 class IncidentReportAdmin(admin.ModelAdmin):
     """Full record; excludes de-identified reports entirely."""
 
+    # The changelist and history pages are not access-logged, so
+    # they must stay free of identifying columns; names and contact
+    # details live only on the logged detail page (codex round 5 #5).
     list_display = [
-        "uuid",
-        "full_name",
-        "email",
-        "state",
+        "id",
         "status",
+        "state",
         "submitted_at",
     ]
     list_filter = ["status", "state"]
-    search_fields = [
-        "uuid", "first_name", "last_name", "email", "city",
-    ]
+    search_fields = ["uuid"]
     ordering = ["-submitted_at"]
     readonly_fields = ["uuid", "created_at", "updated_at"]
 
@@ -306,25 +318,50 @@ class IncidentReportAdmin(admin.ModelAdmin):
             super()
             .get_queryset(request)
             .exclude(deidentified_q())
-            .distinct()
+        )
+
+    def _log_pii_access(self, request, object_id, surface):
+        """
+        Log only a successful, authorized read: the object must come
+        from the restricted queryset and the user must hold view
+        permission — a denied request records nothing (codex round 5
+        #7).
+        """
+
+        report = self.get_object(request, object_id)
+
+        if report is None:
+            return
+
+        if not self.has_view_or_change_permission(request, report):
+            return
+
+        PIIAccessLog.objects.create(
+            user=request.user,
+            username=request.user.get_username(),
+            report=report,
+            report_uuid=str(report.uuid),
+            surface=surface,
         )
 
     def change_view(
         self, request, object_id, form_url="", extra_context=None
     ):
-        report = IncidentReport.objects.filter(pk=object_id).first()
-
-        if report:
-            PIIAccessLog.objects.create(
-                user=request.user,
-                username=request.user.get_username(),
-                report=report,
-                report_uuid=str(report.uuid),
-                surface="admin_full_detail",
-            )
+        self._log_pii_access(
+            request, object_id, "admin_full_detail"
+        )
 
         return super().change_view(
             request, object_id, form_url, extra_context
+        )
+
+    def history_view(self, request, object_id, extra_context=None):
+        self._log_pii_access(
+            request, object_id, "admin_full_history"
+        )
+
+        return super().history_view(
+            request, object_id, extra_context
         )
 
 

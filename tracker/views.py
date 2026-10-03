@@ -481,6 +481,14 @@ def incident_report_create(request):
                 )
             )
 
+            # The hand-off pages show the report's own data, so
+            # access is bound to the submitting browser session; the
+            # uuid alone is not an access credential (codex round 5
+            # #1).
+            ucp_session = request.session.get("ucp_reports", [])
+            ucp_session.append(str(report.uuid))
+            request.session["ucp_reports"] = ucp_session[-10:]
+
             return redirect(
                 "ucp_offer"
                 if ucp_eligible(report) and authorized
@@ -657,7 +665,7 @@ def incident_report_success(
 
 import logging
 
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 
 from . import ucp
 from .models import UCPFiling
@@ -699,6 +707,11 @@ def ucp_offer(request, uuid):
     """
 
     report = _submitted_report(uuid)
+
+    if str(report.uuid) not in request.session.get(
+        "ucp_reports", []
+    ):
+        raise Http404("Not available")
 
     if not ucp_eligible(report):
         return redirect(

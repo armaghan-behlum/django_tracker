@@ -615,14 +615,24 @@ DIRECT_IDENTIFIER_FIELDS = {
 
 
 def deidentified_q():
-    """Q matching reports whose reporter opted out of follow-up."""
+    """
+    Q matching reports whose reporter opted out of follow-up.
+
+    Uses a correlated Exists so BOTH conditions must hold on the
+    SAME referral row; a joined predicate lets separate rows satisfy
+    them, which both hid the wrong reports from follow-up staff and
+    broke under negation (codex round 5 #3).
+    """
+
+    anonymous_aroc = ReportReferral.objects.filter(
+        report=models.OuterRef("pk"),
+        organization__slug="aroc_iuapr",
+        anonymous=True,
+    )
 
     return (
         models.Q(opt_out_of_followup=True)
-        | models.Q(
-            referrals__organization__slug="aroc_iuapr",
-            referrals__anonymous=True,
-        )
+        | models.Q(models.Exists(anonymous_aroc))
     )
 
 
@@ -658,7 +668,7 @@ class DeidentifiedReport(IncidentReport):
     def __str__(self):
         # The parent __str__ carries the reporter's name, and the
         # admin renders __str__ in titles and breadcrumbs.
-        return f"Report {self.uuid}"
+        return f"De-identified report #{self.pk}"
 
 
 class PIIAccessLog(models.Model):
