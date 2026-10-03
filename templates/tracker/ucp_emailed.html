@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Complaint Emailed
+{% endblock %}
+
+{% block content %}
+
+<div class="form-section">
+
+    <h1 class="mb-3">
+        Your completed complaint is in your inbox.
+    </h1>
+
+    <p class="lead">
+        We emailed your completed {{ district_name }} complaint to
+        <strong>{{ report.email }}</strong>, with filing
+        instructions. Your typed name and date count as your
+        signature.
+    </p>
+
+    <div class="privacy-box">
+        <strong>One step left:</strong> send it to the district.
+        Forward our email (with the PDF attached) to your district
+        office, addressed to the UCP Compliance Officer &mdash; or
+        use the button below to start a draft, then attach the PDF
+        from our email.
+    </div>
+
+    <a
+        href="{{ mailto }}"
+        class="btn btn-primary btn-lg mt-2"
+    >
+        Start the email to your district
+    </a>
+
+    <p class="required-note mt-3">
+        The district must investigate and send you a written
+        decision within 60 days. Discrimination, harassment,
+        intimidation, or bullying complaints must be filed within
+        6 months of the conduct or of first learning of it.
+    </p>
+
+    <hr class="my-4">
+
+    <a
+        href="{% url 'incident_report_success' uuid=report.uuid %}"
+        class="btn btn-link ps-0"
+    >
+        Done &mdash; back to your report confirmation
+    </a>
+
+</div>
+
+{% endblock %}

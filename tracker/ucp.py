@@ -253,6 +253,23 @@ def known_answers(report):
         "prior_contact": _prior_contact_text(report, school),
     }
 
+    # Typed digital signature (legal opinion: a typed name counts;
+    # pilot approved). 288/304 specs map the signing DATE as
+    # date_signed (a few split it); none map a typed-name key yet —
+    # "signature"/"complainant_signature" are emitted so district
+    # specs can adopt them without a tracker change.
+    if report.signature_name:
+        answers["signature"] = report.signature_name
+        answers["complainant_signature"] = report.signature_name
+
+    if report.signature_date:
+        answers["date_signed"] = _fmt_date(report.signature_date)
+        answers["signed_day"] = str(report.signature_date.day)
+        answers["sign_day"] = str(report.signature_date.day)
+        answers["signed_month"] = report.signature_date.strftime("%B")
+        answers["sign_month"] = report.signature_date.strftime("%B")
+        answers["signed_year"] = str(report.signature_date.year)
+
     if formal:
         answers.update({
             "address": formal.complainant_address,
@@ -532,6 +549,20 @@ def build_plan(report, spec, cds=None):
 
         else:
             followups.append(field)
+
+    # The portal hides date_signed from question plans and stamps
+    # TODAY's date at generation when it is absent; the reporter's
+    # attested signature date must win. /generate only collects keys
+    # present in the district's raw spec, so sending the signature
+    # answers beyond the plan is safe, and the signature is the
+    # reporter's own attestation (shown to them on the page).
+    for key in (
+        "date_signed", "signature", "complainant_signature",
+        "signed_day", "sign_day", "signed_month", "sign_month",
+        "signed_year",
+    ):
+        if key in answers and key not in submit:
+            submit[key] = answers[key]
 
     return {
         "prefilled": prefilled,

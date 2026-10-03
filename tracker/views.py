@@ -657,12 +657,55 @@ def incident_report_success(
 
 import logging
 
+from urllib.parse import quote
+
+from django.conf import settings
+from django.core.mail import EmailMessage
 from django.http import HttpResponse
 
 from . import ucp
 from .models import UCPFiling
 
 logger = logging.getLogger(__name__)
+
+
+def _email_complaint(report, district_name, filename, pdf):
+    """
+    Send the completed complaint to the REPORTER, from the tracker,
+    with Reply-To set to them (per the pilot legal opinion). The PDF
+    is attached and discarded; nothing is stored server-side.
+    """
+
+    message = EmailMessage(
+        subject=(
+            "Your completed UCP complaint — " + district_name
+        ),
+        body=(
+            f"Salaam {report.first_name},\n\n"
+            "Attached is your completed Uniform Complaint "
+            f"Procedures (UCP) complaint for {district_name}.\n\n"
+            "To file it:\n"
+            "1. Review the attached PDF — your typed name and date "
+            "serve as your signature.\n"
+            "2. Email it to your district office, addressed to the "
+            "UCP Compliance Officer, or print and deliver it.\n"
+            "3. The district must investigate and send you a "
+            "written decision within 60 days. Discrimination, "
+            "harassment, intimidation, or bullying complaints must "
+            "be filed within 6 months of the conduct or of first "
+            "learning of it.\n\n"
+            "If you need help, call us at 415-861-7444 "
+            "(10AM-5PM PT).\n\n"
+            "AROC Action & IUAPR\n"
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[report.email],
+        reply_to=[report.email],
+    )
+
+    message.attach(filename, pdf, "application/pdf")
+
+    message.send(fail_silently=False)
 
 
 def _submitted_report(uuid):
@@ -769,10 +812,67 @@ def ucp_offer(request, uuid):
             tier=spec.get("tier", ""),
         )
 
+        district_name = spec.get("name", "your school district")
+
         safe_name = "".join(
             c for c in spec.get("name", "district")
             if c.isalnum() or c in " -"
         )
+
+        filename = f"UCP Complaint - {safe_name}.pdf"
+
+        # Email-delivery pilot (legal opinion: typed signature +
+        # submission by email from us, Reply-To the reporter, is OK
+        # to pilot). The PDF is generated, attached, and discarded —
+        # never stored server-side. We do not email districts
+        # directly yet; harvesting district UCP contact addresses is
+        # the explicit next step before that.
+        if request.POST.get("deliver") == "email" and report.email:
+            try:
+                _email_complaint(
+                    report, district_name, filename, pdf
+                )
+
+            except Exception:
+                logger.exception("UCP complaint email failed")
+                response = HttpResponse(
+                    pdf,
+                    content_type="application/pdf",
+                )
+                response["Content-Disposition"] = (
+                    f'attachment; filename="{filename}"'
+                )
+                return response
+
+            mailto = (
+                "mailto:?subject="
+                + quote(
+                    "Uniform Complaint Procedures complaint — "
+                    + district_name
+                )
+                + "&body="
+                + quote(
+                    "Dear UCP Compliance Officer,\n\n"
+                    "Please find attached my complaint under the "
+                    "Uniform Complaint Procedures. I understand the "
+                    "district must investigate and provide a written "
+                    "decision within 60 days.\n\n"
+                    "Thank you,\n"
+                    + report.full_name
+                    + "\n\n(Remember to attach the PDF from the "
+                    "email we sent you before sending.)"
+                )
+            )
+
+            return render(
+                request,
+                "tracker/ucp_emailed.html",
+                {
+                    "report": report,
+                    "district_name": district_name,
+                    "mailto": mailto,
+                },
+            )
 
         response = HttpResponse(
             pdf,
@@ -780,7 +880,7 @@ def ucp_offer(request, uuid):
         )
 
         response["Content-Disposition"] = (
-            f'attachment; filename="UCP Complaint - {safe_name}.pdf"'
+            f'attachment; filename="{filename}"'
         )
 
         return response
