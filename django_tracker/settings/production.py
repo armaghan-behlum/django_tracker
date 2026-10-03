@@ -1,9 +1,9 @@
 from .base import *
 
-# get_env_variable returns a STRING; any non-empty value (including
-# "False") is truthy, which turned debug pages on in production and
-# exposed tracebacks, settings, and submitted data on errors.
-DEBUG = get_env_variable('DEBUG') == 'True'
+# Never respect the environment here: debug pages expose tracebacks,
+# settings, and submitted reporter data. Production is always False;
+# local and staging settings keep their own debug switches.
+DEBUG = False
 
 ALLOWED_HOSTS = ['tracker.arocaction.org', 
     'www.arocaction.org', 'arocaction.org', 
