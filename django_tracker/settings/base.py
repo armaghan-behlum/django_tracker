@@ -52,7 +52,6 @@ INSTALLED_APPS = [
     'django_extensions',
     'storages',
     'anymail',
-    'hcaptcha',
 ]
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
@@ -191,10 +190,9 @@ if "CI" in os.environ:
 # ---------------------------------------------------------------------
 # The captcha field only appears when a site key is configured, so
 # local development without keys keeps working.
-# Env var: HCAPTCHA_KEY (as configured on the production app). The
-# Django setting itself must be named HCAPTCHA_SITEKEY because the
-# django-hcaptcha package reads that name internally.
-HCAPTCHA_SITEKEY = os.environ.get("HCAPTCHA_KEY", "")
+# In-house integration (tracker/captcha.py); the field only appears
+# when the site key is configured, and is fail-closed when it is.
+HCAPTCHA_KEY = os.environ.get("HCAPTCHA_KEY", "")
 HCAPTCHA_SECRET = os.environ.get("HCAPTCHA_SECRET", "")
 
 # Public information sheet / data retention policy linked from the

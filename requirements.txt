@@ -8,7 +8,6 @@ django-celery-beat>=2.2.0
 django-crispy-forms==1.14.0
 django-debug-toolbar
 django-extensions
-django-hcaptcha
 django-storages
 django-summernote
 crispy-bootstrap5
