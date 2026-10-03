@@ -131,6 +131,11 @@ class IncidentReport(models.Model):
             MinValueValidator(2000),
             MaxValueValidator(2030),
         ])
+    incident_date_estimate = models.CharField(max_length=200,
+        blank=True, help_text=(
+            "Free-text best estimate, used when the date precision "
+            "is \"Best estimate / unknown\"."
+        ))
     description = models.TextField()
     city = models.CharField(max_length=150, blank=True)
     zip_code = models.CharField(max_length=20, blank=True)

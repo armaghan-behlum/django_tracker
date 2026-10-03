@@ -197,6 +197,9 @@ def _incident_date_text(report):
     if precision == report.DatePrecision.ONGOING:
         return "Ongoing"
 
+    if report.incident_date_estimate:
+        return f"Best estimate: {report.incident_date_estimate}"
+
     return "Date not known (best estimate)"
 
 

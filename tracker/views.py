@@ -273,6 +273,7 @@ def incident_report_create(request):
                     "incident_date",
                     "incident_month",
                     "incident_year",
+                    "incident_date_estimate",
                     "description",
                     "city",
                     "zip_code",
