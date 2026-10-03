@@ -796,6 +796,39 @@ def ucp_offer(request, uuid):
             else:
                 answers.pop(field["key"], None)
 
+        wants_email = (
+            settings.UCP_EMAIL_DELIVERY
+            and request.POST.get("deliver") == "email"
+            and bool(report.email)
+        )
+
+        if wants_email:
+            # Refreshes/double-clicks must not resend, and cycling
+            # districts must not turn one report into a mail cannon
+            # (codex round 5 + system audit): re-render the
+            # confirmation instead.
+            emailed = request.session.get("ucp_emailed", [])
+            emailed_key = f"{report.uuid}:{cds}"
+            report_sends = [
+                key for key in emailed
+                if key.startswith(f"{report.uuid}:")
+            ]
+            district_name = spec.get("name", "your school district")
+
+            if emailed_key in emailed or len(report_sends) >= 3:
+                return render(
+                    request,
+                    "tracker/ucp_emailed.html",
+                    {
+                        "report": report,
+                        "district_name": district_name,
+                        "mailto": _district_mailto(
+                            district_name, report
+                        ),
+                        "capped": emailed_key not in emailed,
+                    },
+                )
+
         try:
             pdf = ucp.generate_pdf(cds, answers)
 
@@ -810,17 +843,55 @@ def ucp_offer(request, uuid):
                 },
             )
 
-        UCPFiling.objects.create(
+        if not UCPFiling.objects.filter(
             report=report,
             district_cds=cds,
-            district_name=spec.get("name", ""),
-            tier=spec.get("tier", ""),
-        )
+        ).exists():
+            UCPFiling.objects.create(
+                report=report,
+                district_cds=cds,
+                district_name=spec.get("name", ""),
+                tier=spec.get("tier", ""),
+            )
+
+        district_name = spec.get("name", "your school district")
 
         safe_name = "".join(
             c for c in spec.get("name", "district")
             if c.isalnum() or c in " -"
         )
+
+        filename = f"UCP Complaint - {safe_name}.pdf"
+
+        if wants_email:
+            try:
+                _email_complaint(
+                    report, district_name, filename, pdf
+                )
+
+            except Exception:
+                # Send failure must not lose the complaint: stream
+                # the download instead.
+                logger.exception("UCP complaint email failed")
+
+            else:
+                emailed = request.session.get("ucp_emailed", [])
+
+                if emailed_key not in emailed:
+                    emailed.append(emailed_key)
+                    request.session["ucp_emailed"] = emailed[-10:]
+
+                return render(
+                    request,
+                    "tracker/ucp_emailed.html",
+                    {
+                        "report": report,
+                        "district_name": district_name,
+                        "mailto": _district_mailto(
+                            district_name, report
+                        ),
+                    },
+                )
 
         response = HttpResponse(
             pdf,
@@ -828,7 +899,7 @@ def ucp_offer(request, uuid):
         )
 
         response["Content-Disposition"] = (
-            f'attachment; filename="UCP Complaint - {safe_name}.pdf"'
+            f'attachment; filename="{filename}"'
         )
 
         return response
@@ -864,6 +935,22 @@ def ucp_offer(request, uuid):
                 "prefilled": plan["prefilled"],
                 "followups": plan["followups"],
                 "checkbox_fields": plan["checkbox_fields"],
+                "email_delivery": settings.UCP_EMAIL_DELIVERY,
+                "district_name": spec.get(
+                    "name", "your school district"
+                ),
+                "mailto": _district_mailto(
+                    spec.get("name", "your school district"),
+                    report,
+                ),
+                "email_subject": _district_email_text(
+                    spec.get("name", "your school district"),
+                    report,
+                )[0],
+                "email_body": _district_email_text(
+                    spec.get("name", "your school district"),
+                    report,
+                )[1],
             },
         )
 
