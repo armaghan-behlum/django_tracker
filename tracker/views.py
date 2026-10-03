@@ -668,6 +668,8 @@ def incident_report_success(
 import logging
 import time
 
+from urllib.parse import quote
+from django.core.mail import EmailMessage
 from django.http import Http404, HttpResponse
 
 from . import ucp
@@ -733,6 +735,84 @@ def ucp_eligible(report):
         and california.is_k12_incident
     )
 
+
+
+def _district_email_text(district_name, report):
+    """
+    The message a reporter sends the district. One source of truth:
+    the mailto draft and the on-page copy block both use it. The
+    tracker never sends email itself (no verified sender domain);
+    the reporter sends from their own account and attaches the
+    downloaded PDF.
+    """
+
+    subject = (
+        "Uniform Complaint Procedures complaint — " + district_name
+    )
+
+    body = (
+        "Dear UCP Compliance Officer,\n\n"
+        "I am filing a complaint under the Uniform Complaint "
+        f"Procedures regarding {district_name}. My completed and "
+        "signed complaint form is attached.\n\n"
+        "Please send me written acknowledgment that you received "
+        "this complaint. I understand the district must "
+        "investigate and provide a written decision within "
+        "60 days.\n\n"
+        "Thank you,\n"
+        + report.full_name
+    )
+
+    return subject, body
+
+
+def _district_mailto(district_name, report):
+    subject, body = _district_email_text(district_name, report)
+
+    return (
+        "mailto:?subject=" + quote(subject) + "&body=" + quote(body)
+    )
+
+
+def _email_complaint(report, district_name, filename, pdf):
+    """
+    Send the completed complaint to the REPORTER, from the tracker,
+    with Reply-To set to them. Only runs when
+    settings.UCP_EMAIL_DELIVERY is on (real Postmark key + verified
+    sender domain in the deploy env). The PDF is attached and
+    discarded; nothing is stored server-side.
+    """
+
+    message = EmailMessage(
+        subject=(
+            "Your completed UCP complaint — " + district_name
+        ),
+        body=(
+            f"Salaam {report.first_name},\n\n"
+            "Attached is your completed Uniform Complaint "
+            f"Procedures (UCP) complaint for {district_name}.\n\n"
+            "To file it:\n"
+            "1. Review the attached PDF — your typed name and date "
+            "serve as your signature.\n"
+            "2. Email it to your district office, addressed to the "
+            "UCP Compliance Officer, or print and deliver it.\n"
+            "3. The district must investigate and send you a "
+            "written decision within 60 days. Discrimination, "
+            "harassment, intimidation, or bullying complaints must "
+            "be filed within 6 months of the conduct or of first "
+            "learning of it.\n\n"
+            "If you need help, call us at 415-861-7444 "
+            "(10AM-5PM PT).\n\n"
+            "AROC Action & IUAPR\n"
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[report.email],
+        reply_to=[report.email],
+    )
+
+    message.attach(filename, pdf, "application/pdf")
+
+    message.send(fail_silently=False)
 
 def ucp_offer(request, uuid):
     """
