@@ -191,7 +191,10 @@ if "CI" in os.environ:
 # ---------------------------------------------------------------------
 # The captcha field only appears when a site key is configured, so
 # local development without keys keeps working.
-HCAPTCHA_SITEKEY = os.environ.get("HCAPTCHA_SITEKEY", "")
+# Env var: HCAPTCHA_KEY (as configured on the production app). The
+# Django setting itself must be named HCAPTCHA_SITEKEY because the
+# django-hcaptcha package reads that name internally.
+HCAPTCHA_SITEKEY = os.environ.get("HCAPTCHA_KEY", "")
 HCAPTCHA_SECRET = os.environ.get("HCAPTCHA_SECRET", "")
 
 # Public information sheet / data retention policy linked from the
