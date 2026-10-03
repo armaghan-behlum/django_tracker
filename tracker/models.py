@@ -539,7 +539,13 @@ class AffectedPersonDemographics(models.Model):
     religion_other = models.CharField(max_length=150, blank=True)
 
     def __str__(self):
-        return f"Demographics — {self.report.uuid}"
+        # The old f-string read self.report, which does not exist,
+        # so every admin delete-confirmation render crashed. Kept
+        # PII-free: this string reaches admin lists and breadcrumbs.
+        return (
+            f"Demographics — affected person "
+            f"#{self.affected_person_id}"
+        )
 
 def report_attachment_upload_to(instance, filename):
     return (

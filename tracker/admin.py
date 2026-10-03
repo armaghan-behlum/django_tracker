@@ -320,12 +320,14 @@ class IncidentReportAdmin(admin.ModelAdmin):
             .exclude(deidentified_q())
         )
 
-    def _log_pii_access(self, request, object_id, surface):
+    def _log_pii_access(
+        self, request, object_id, surface, permission_check=None
+    ):
         """
         Log only a successful, authorized read: the object must come
-        from the restricted queryset and the user must hold view
-        permission — a denied request records nothing (codex round 5
-        #7).
+        from the restricted queryset and the user must hold the
+        permission that surface enforces — a denied request records
+        nothing (codex round 5 #7).
         """
 
         report = self.get_object(request, object_id)
@@ -333,7 +335,12 @@ class IncidentReportAdmin(admin.ModelAdmin):
         if report is None:
             return
 
-        if not self.has_view_or_change_permission(request, report):
+        permitted = (
+            permission_check
+            or self.has_view_or_change_permission
+        )
+
+        if not permitted(request, report):
             return
 
         PIIAccessLog.objects.create(
@@ -361,6 +368,21 @@ class IncidentReportAdmin(admin.ModelAdmin):
         )
 
         return super().history_view(
+            request, object_id, extra_context
+        )
+
+    def delete_view(self, request, object_id, extra_context=None):
+        # The delete confirmation page names the reporter, so it is
+        # an identifying read like detail/history (codex system
+        # audit).
+        self._log_pii_access(
+            request,
+            object_id,
+            "admin_full_delete",
+            permission_check=self.has_delete_permission,
+        )
+
+        return super().delete_view(
             request, object_id, extra_context
         )
 

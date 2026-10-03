@@ -484,10 +484,10 @@ def incident_report_create(request):
             # The hand-off pages show the report's own data, so
             # access is bound to the submitting browser session; the
             # uuid alone is not an access credential (codex round 5
-            # #1).
-            ucp_session = request.session.get("ucp_reports", [])
-            ucp_session.append(str(report.uuid))
-            request.session["ucp_reports"] = ucp_session[-10:]
+            # #1). The grant expires on its own, and the session key
+            # is rotated so a pre-submission session id cannot carry
+            # it (codex system audit).
+            _grant_ucp_access(request, report)
 
             return redirect(
                 "ucp_offer"
@@ -664,6 +664,7 @@ def incident_report_success(
 # ---------------------------------------------------------------------
 
 import logging
+import time
 
 from django.http import Http404, HttpResponse
 
@@ -671,6 +672,41 @@ from . import ucp
 from .models import UCPFiling
 
 logger = logging.getLogger(__name__)
+
+
+# The hand-off grant outlives neither the browser session nor this
+# window; after that the reporter resubmits or contacts support.
+UCP_GRANT_SECONDS = 48 * 3600
+
+
+def _grant_ucp_access(request, report):
+    grants = request.session.get("ucp_reports")
+
+    if not isinstance(grants, dict):
+        grants = {}
+
+    grants[str(report.uuid)] = int(time.time()) + UCP_GRANT_SECONDS
+
+    # Keep only the newest grants so the session stays small.
+    while len(grants) > 10:
+        del grants[min(grants, key=grants.get)]
+
+    request.session["ucp_reports"] = grants
+    request.session.cycle_key()
+
+
+def _has_ucp_access(request, report):
+    grants = request.session.get("ucp_reports")
+
+    if isinstance(grants, dict):
+        expires = grants.get(str(report.uuid))
+        return bool(expires) and time.time() < expires
+
+    if isinstance(grants, list):
+        # Session written before grants carried an expiry.
+        return str(report.uuid) in grants
+
+    return False
 
 
 def _submitted_report(uuid):
@@ -708,9 +744,7 @@ def ucp_offer(request, uuid):
 
     report = _submitted_report(uuid)
 
-    if str(report.uuid) not in request.session.get(
-        "ucp_reports", []
-    ):
+    if not _has_ucp_access(request, report):
         raise Http404("Not available")
 
     if not ucp_eligible(report):
