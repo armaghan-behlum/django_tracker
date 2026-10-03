@@ -544,7 +544,13 @@ class AffectedPersonDemographics(models.Model):
     religion_other = models.CharField(max_length=150, blank=True)
 
     def __str__(self):
-        return f"Demographics — {self.report.uuid}"
+        # The old f-string read self.report, which does not exist,
+        # so every admin delete-confirmation render crashed. Kept
+        # PII-free: this string reaches admin lists and breadcrumbs.
+        return (
+            f"Demographics — affected person "
+            f"#{self.affected_person_id}"
+        )
 
 def report_attachment_upload_to(instance, filename):
     return (
@@ -591,3 +597,118 @@ class UCPFiling(models.Model):
 
     def __str__(self):
         return f"{self.report.uuid} → {self.district_name}"
+
+
+# ---------------------------------------------------------------------
+# DATA SEPARATION (pilot)
+# ---------------------------------------------------------------------
+#
+# Single source of truth for the access model (see DATA_ACCESS.md).
+# Direct identifiers: fields that name or contact a person by
+# construction. Open-text scrubbing (description etc.) and
+# quasi-identifier generalization (school, grade, role, city) are
+# the next phase.
+
+DIRECT_IDENTIFIER_FIELDS = {
+    "IncidentReport": [
+        "first_name", "last_name", "email", "phone",
+        "signature_name", "signature_date",
+    ],
+    "AffectedPerson": ["first_name", "last_name"],
+    "CaliforniaDetails": ["child_full_name", "student_date_of_birth"],
+    "SchoolIncident": ["principal", "concerns_addressed_to"],
+    "FormalSchoolComplaint": [
+        "complaint_against", "individuals_involved", "witnesses",
+        "concerns_addressed_to", "complainant_address",
+    ],
+    "ReportAttachment": ["file"],
+}
+
+
+def deidentified_q():
+    """
+    Q matching reports whose reporter opted out of follow-up.
+
+    Uses a correlated Exists so BOTH conditions must hold on the
+    SAME referral row; a joined predicate lets separate rows satisfy
+    them, which both hid the wrong reports from follow-up staff and
+    broke under negation (codex round 5 #3).
+    """
+
+    anonymous_aroc = ReportReferral.objects.filter(
+        report=models.OuterRef("pk"),
+        organization__slug="aroc_iuapr",
+        anonymous=True,
+    )
+
+    return (
+        models.Q(opt_out_of_followup=True)
+        | models.Q(models.Exists(anonymous_aroc))
+    )
+
+
+def _incident_report_is_deidentified(report):
+    if report.opt_out_of_followup:
+        return True
+
+    return report.referrals.filter(
+        organization__slug="aroc_iuapr",
+        anonymous=True,
+    ).exists()
+
+
+IncidentReport.is_deidentified = property(
+    _incident_report_is_deidentified
+)
+
+
+class DeidentifiedReport(IncidentReport):
+    """
+    Coordinator-facing representation: same rows, but the admin
+    registered for this proxy exposes no direct identifiers for ANY
+    report. A separate scrubbed table is the next phase; this proxy
+    keeps the surface separate from the full-record admin rather
+    than a bypassable toggle.
+    """
+
+    class Meta:
+        proxy = True
+        verbose_name = "De-identified report"
+        verbose_name_plural = "De-identified reports"
+
+    def __str__(self):
+        # The parent __str__ carries the reporter's name, and the
+        # admin renders __str__ in titles and breadcrumbs.
+        return f"De-identified report #{self.pk}"
+
+
+class PIIAccessLog(models.Model):
+    """One row per view of a full (identifying) report record."""
+
+    user = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="pii_access_logs",
+    )
+    username = models.CharField(max_length=150)
+    report = models.ForeignKey(
+        IncidentReport,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="pii_access_logs",
+    )
+    report_uuid = models.CharField(max_length=36)
+    surface = models.CharField(max_length=50)
+    accessed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-accessed_at"]
+        verbose_name = "PII access log entry"
+        verbose_name_plural = "PII access log"
+
+    def __str__(self):
+        return (
+            f"{self.username} viewed {self.report_uuid} "
+            f"({self.surface}) at {self.accessed_at:%Y-%m-%d %H:%M}"
+        )
