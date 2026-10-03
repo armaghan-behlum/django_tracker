@@ -8,16 +8,31 @@
 
 <div class="form-section">
 
-    <h1 class="mb-3">
-        Your completed complaint is in your inbox.
-    </h1>
+    {% if capped %}
+        <h1 class="mb-3">
+            Your complaint emails are already on their way.
+        </h1>
 
-    <p class="lead">
-        We emailed your completed {{ district_name }} complaint to
-        <strong>{{ report.email }}</strong>, with filing
-        instructions. Your typed name and date count as your
-        signature.
-    </p>
+        <p class="lead">
+            We have already emailed completed complaints for this
+            report to <strong>{{ report.email }}</strong>. To keep
+            inboxes safe we stop after a few sends &mdash; please
+            use the download button on the previous page for any
+            further districts, or forward one of our earlier
+            emails.
+        </p>
+    {% else %}
+        <h1 class="mb-3">
+            Your completed complaint is in your inbox.
+        </h1>
+
+        <p class="lead">
+            We emailed your completed {{ district_name }} complaint
+            to <strong>{{ report.email }}</strong>, with filing
+            instructions. Your typed name and date count as your
+            signature.
+        </p>
+    {% endif %}
 
     <div class="privacy-box">
         <strong>One step left:</strong> send it to the district.

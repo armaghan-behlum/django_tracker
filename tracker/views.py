@@ -840,6 +840,35 @@ def ucp_offer(request, uuid):
                 },
             )
 
+        # Cap email deliveries per REPORT, not per district: cycling
+        # through districts must not turn one report into a mail
+        # cannon (codex system audit). The download button stays
+        # available.
+        report_sends = [
+            key
+            for key in request.session.get("ucp_emailed", [])
+            if key.startswith(f"{report.uuid}:")
+        ]
+
+        if (
+            request.POST.get("deliver") == "email"
+            and len(report_sends) >= 3
+        ):
+            district_name = spec.get("name", "your school district")
+
+            return render(
+                request,
+                "tracker/ucp_emailed.html",
+                {
+                    "report": report,
+                    "district_name": district_name,
+                    "mailto": _district_mailto(
+                        district_name, report
+                    ),
+                    "capped": True,
+                },
+            )
+
         try:
             pdf = ucp.generate_pdf(cds, answers)
 
