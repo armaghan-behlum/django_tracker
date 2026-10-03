@@ -669,6 +669,28 @@ from .models import UCPFiling
 logger = logging.getLogger(__name__)
 
 
+def _district_mailto(district_name, report):
+    return (
+        "mailto:?subject="
+        + quote(
+            "Uniform Complaint Procedures complaint — "
+            + district_name
+        )
+        + "&body="
+        + quote(
+            "Dear UCP Compliance Officer,\n\n"
+            "Please find attached my complaint under the "
+            "Uniform Complaint Procedures. I understand the "
+            "district must investigate and provide a written "
+            "decision within 60 days.\n\n"
+            "Thank you,\n"
+            + report.full_name
+            + "\n\n(Remember to attach the PDF from the "
+            "email we sent you before sending.)"
+        )
+    )
+
+
 def _email_complaint(report, district_name, filename, pdf):
     """
     Send the completed complaint to the REPORTER, from the tracker,
@@ -791,6 +813,33 @@ def ucp_offer(request, uuid):
             else:
                 answers.pop(field["key"], None)
 
+        # Refreshes and double-clicks of the email action must not
+        # resend or refile (codex round 5 #6): the first successful
+        # send marks the session, and repeats re-render the
+        # confirmation.
+        emailed_key = f"{report.uuid}:{cds}"
+        already_emailed = emailed_key in request.session.get(
+            "ucp_emailed", []
+        )
+
+        if (
+            request.POST.get("deliver") == "email"
+            and already_emailed
+        ):
+            district_name = spec.get("name", "your school district")
+
+            return render(
+                request,
+                "tracker/ucp_emailed.html",
+                {
+                    "report": report,
+                    "district_name": district_name,
+                    "mailto": _district_mailto(
+                        district_name, report
+                    ),
+                },
+            )
+
         try:
             pdf = ucp.generate_pdf(cds, answers)
 
@@ -805,12 +854,16 @@ def ucp_offer(request, uuid):
                 },
             )
 
-        UCPFiling.objects.create(
+        if not UCPFiling.objects.filter(
             report=report,
             district_cds=cds,
-            district_name=spec.get("name", ""),
-            tier=spec.get("tier", ""),
-        )
+        ).exists():
+            UCPFiling.objects.create(
+                report=report,
+                district_cds=cds,
+                district_name=spec.get("name", ""),
+                tier=spec.get("tier", ""),
+            )
 
         district_name = spec.get("name", "your school district")
 
@@ -844,25 +897,13 @@ def ucp_offer(request, uuid):
                 )
                 return response
 
-            mailto = (
-                "mailto:?subject="
-                + quote(
-                    "Uniform Complaint Procedures complaint — "
-                    + district_name
-                )
-                + "&body="
-                + quote(
-                    "Dear UCP Compliance Officer,\n\n"
-                    "Please find attached my complaint under the "
-                    "Uniform Complaint Procedures. I understand the "
-                    "district must investigate and provide a written "
-                    "decision within 60 days.\n\n"
-                    "Thank you,\n"
-                    + report.full_name
-                    + "\n\n(Remember to attach the PDF from the "
-                    "email we sent you before sending.)"
-                )
-            )
+            emailed = request.session.get("ucp_emailed", [])
+
+            if emailed_key not in emailed:
+                emailed.append(emailed_key)
+                request.session["ucp_emailed"] = emailed[-10:]
+
+            mailto = _district_mailto(district_name, report)
 
             return render(
                 request,
