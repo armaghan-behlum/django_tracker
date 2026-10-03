@@ -386,7 +386,7 @@
         </div>
 
         <p class="mt-3 mb-0">
-            For online hate or repression, we recommend also filling
+            For online hate or repression, we suggest also filling
             out an incident report with 7amleh:
             <a
                 href="https://7or.7amleh.org/"
@@ -425,6 +425,19 @@
             </div>
         </div>
 
+        <div
+            id="estimate-date-fields"
+            class="conditional-section"
+        >
+            {{ incident_form.incident_date_estimate|as_crispy_field }}
+        </div>
+
+        <p class="text-muted mb-1">
+            For example: what happened, where it happened, who was
+            involved, what did you do, did you get a resolution,
+            etc.
+        </p>
+
         {{ incident_form.description|as_crispy_field }}
 
         {{ incident_form.city|as_crispy_field }}
@@ -441,6 +454,71 @@
     <section class="form-section">
 
         <h2>About the racism involved</h2>
+
+        {{ incident_form.anti_palestinian_racism|as_crispy_field }}
+
+        <details class="info-dropdown">
+            <summary>
+                What is anti-Palestinian racism?
+            </summary>
+
+            <p class="mb-1">
+                <em>Anti-Palestinian racism is a form of systemic
+                racism that works to silence, exclude, erase,
+                stereotype, defame, or treat Palestinians and their
+                stories as less than human. It shows up in many ways
+                and can include:</em>
+            </p>
+
+            <ul class="apr-definitions mb-0">
+                <li class="mb-1">
+                    <strong>Denying the Nakba</strong> &mdash; the
+                    mass violence, forced expulsions, terror
+                    campaigns, massacres and other crimes committed
+                    against Palestinians during the creation of the
+                    State of Israel in 1948.
+                </li>
+                <li class="mb-1">
+                    <strong>Justifying Violence Against
+                    Palestinians</strong>
+                    &mdash; e.g. bullying or threatening a student
+                    for wearing a keffiyeh or standing up for
+                    Palestinian rights.
+                </li>
+                <li class="mb-1">
+                    <strong>Denying that Palestinians are the
+                    Indigenous people of Palestine</strong> with
+                    their own identity and rights.
+                </li>
+                <li class="mb-1">
+                    <strong>Erasing Palestinians&rsquo; human
+                    rights</strong> and their equal dignity and
+                    worth, e.g. not being allowed to talk about what
+                    is happening to Palestinians, related news
+                    stories or experiences.
+                </li>
+                <li class="mb-1">
+                    <strong>Excluding Palestinians or Palestinian
+                    perspectives</strong> or pressuring others to
+                    exclude them.
+                </li>
+                <li class="mb-0">
+                    <strong>Defaming Palestinians or their
+                    allies</strong> with slander, such as calling
+                    them inherently antisemitic, a terrorist threat
+                    or supporter, or against democracy.
+                </li>
+            </ul>
+        </details>
+
+        <div
+            class="conditional-section"
+            id="apr-reason-section"
+        >
+            {{ incident_form.anti_palestinian_racism_reason|as_crispy_field }}
+        </div>
+
+        <hr>
 
         <h3 id="racism-types-heading">
             Did the incident involve any of these forms of racism?*
@@ -465,77 +543,7 @@
             {{ incident_form.racism_types_other|as_crispy_field }}
         </div>
 
-        <hr>
-
-        {{ incident_form.anti_palestinian_racism|as_crispy_field }}
-
-        <details class="info-dropdown">
-            <summary>
-                What is anti-Palestinian racism?
-            </summary>
-
-            <p class="mb-1">
-                <em>Anti-Palestinian racism is a form of systemic
-                racism that works to silence, exclude, erase,
-                stereotype, defame, or treat Palestinians and their
-                stories as less than human. It shows up in many ways
-                and can include:</em>
-            </p>
-
-            <dl class="apr-definitions mb-0">
-                <dt>Nakba Denial</dt>
-                <dd class="mb-1">
-                    Discrediting the factual basis of Palestinian
-                    expulsion in 1948 and other massacres.
-                </dd>
-
-                <dt>Justifying Violence Against Palestinians</dt>
-                <dd class="mb-1">
-                    E.g. bullying or threatening a student for
-                    wearing a keffiyeh or standing up for
-                    Palestinian rights.
-                </dd>
-
-                <dt>Denying Palestinians are Indigenous to
-                Palestine</dt>
-                <dd class="mb-1">
-                    With their own identity and rights.
-                </dd>
-
-                <dt>Erasing Palestinian Human Rights</dt>
-                <dd class="mb-1">
-                    And their equal dignity and worth, e.g. not
-                    being allowed to talk about what is happening to
-                    Palestinians, related news stories or
-                    experiences.
-                </dd>
-
-                <dt>Excluding Palestinians or Palestinian
-                perspectives</dt>
-                <dd class="mb-1">
-                    And stories, or pressuring others to exclude
-                    them, e.g. not being allowed to join a club or
-                    host an event.
-                </dd>
-
-                <dt>Defaming Palestinians or their allies</dt>
-                <dd class="mb-0">
-                    With slander, such as calling them inherently
-                    anti-semitic, a terrorist threat or supporter,
-                    against democracy, or falsely associating them
-                    with Palestinian political factions.
-                </dd>
-            </dl>
-        </details>
-
-        <div
-            class="conditional-section"
-            id="apr-reason-section"
-        >
-            {{ incident_form.anti_palestinian_racism_reason|as_crispy_field }}
-        </div>
-
-        {{ incident_form.knows_of_other_apr_incidents|as_crispy_field }}
+{{ incident_form.knows_of_other_apr_incidents|as_crispy_field }}
 
     </section>
 
@@ -718,22 +726,6 @@
     </section>
 
 
-    {# ========================================================== #}
-    {# 9. ATTACHMENTS #}
-    {# ========================================================== #}
-
-    <section class="form-section">
-
-        <h2>Supporting materials</h2>
-
-        <p>
-            Are there photos or documents you would like to include
-            that help explain what happened?
-        </p>
-
-        {{ attachment_form.files|as_crispy_field }}
-
-    </section>
 
 
     {# ========================================================== #}
@@ -886,6 +878,24 @@
         </div>
 
         {{ school_form.school_response_effect|as_crispy_field }}
+
+    </section>
+
+
+    {# ========================================================== #}
+    {# 9. ATTACHMENTS #}
+    {# ========================================================== #}
+
+    <section class="form-section">
+
+        <h2>Supporting materials</h2>
+
+        <p>
+            Are there photos or documents you would like to include
+            that help explain what happened?
+        </p>
+
+        {{ attachment_form.files|as_crispy_field }}
 
     </section>
 
@@ -1236,6 +1246,11 @@ document.addEventListener("DOMContentLoaded", function () {
         setVisible(
             "month-year-fields",
             precision === "month"
+        );
+
+        setVisible(
+            "estimate-date-fields",
+            precision === "unknown"
         );
     }
 
@@ -1749,10 +1764,31 @@ document.addEventListener("DOMContentLoaded", function () {
                 "middle eastern"
             );
 
+        // Always visible (IUAPR 10/02); required, and starred,
+        // only when SWANA/MENA is selected.
         setVisible(
             "arab-palestinian-section",
-            swana
+            true
         );
+
+        const heading = document.getElementById(
+            "arab-palestinian-heading"
+        );
+
+        if (heading) {
+            const existing = heading.querySelector(".asteriskField");
+
+            if (swana && !existing) {
+                const span = document.createElement("span");
+                span.className = "asteriskField";
+                span.textContent = "*";
+                heading.appendChild(span);
+            }
+
+            if (!swana && existing) {
+                existing.remove();
+            }
+        }
     }
 
 

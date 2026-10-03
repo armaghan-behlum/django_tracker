@@ -98,23 +98,29 @@ def option_queryset(category):
     )
 
 
-def length_ordered(queryset):
+def length_ordered(queryset, first_slug=None):
     """
     Display order for ragged checkbox grids: shortest label first so
-    items of similar height share a grid row; "Other..." stays last.
+    items of similar height share a grid row; "Other..." stays last,
+    and `first_slug` (if given) is pinned to the top.
     Seed sort_order is untouched — this is presentation only.
     """
     from django.db.models import Case, IntegerField, Value, When
     from django.db.models.functions import Length
 
     return queryset.annotate(
+        _pin=Case(
+            When(slug=first_slug, then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        ) if first_slug else Value(1, output_field=IntegerField()),
         _other=Case(
             When(slug__icontains="other", then=Value(1)),
             default=Value(0),
             output_field=IntegerField(),
         ),
         _len=Length("label"),
-    ).order_by("_other", "_len", "label")
+    ).order_by("_pin", "_other", "_len", "label")
 
 
 def initial_option_ids(report, category):
@@ -352,6 +358,7 @@ class IncidentDetailsForm(forms.ModelForm):
             "incident_date",
             "incident_month",
             "incident_year",
+            "incident_date_estimate",
             "description",
             "city",
             "zip_code",
@@ -371,6 +378,7 @@ class IncidentDetailsForm(forms.ModelForm):
             "incident_date": "Date",
             "incident_month": "Month",
             "incident_year": "Year",
+            "incident_date_estimate": "Your best estimate",
             "description": (
                 "Please describe what happened. Provide as much "
                 "detail as possible."
@@ -385,7 +393,7 @@ class IncidentDetailsForm(forms.ModelForm):
             ),
             "anti_palestinian_racism": (
                 "Are you reporting an incident or experience that "
-                "you believe constitutes anti-Palestinian racism?"
+                "you believe involved anti-Palestinian racism?"
             ),
             "knows_of_other_apr_incidents": (
                 "Aside from this incident, have you witnessed other "
@@ -404,11 +412,8 @@ class IncidentDetailsForm(forms.ModelForm):
         }
 
         help_texts = {
-            "description": (
-                "For example: what happened, where it happened, who "
-                "was involved, what did you do, did you get a "
-                "resolution, etc."
-            ),
+            "description": "",
+            "incident_date_estimate": "",
             "knows_of_other_apr_incidents": "",
             "previously_reported": "",
             "resolution_steps": "",
@@ -432,6 +437,9 @@ class IncidentDetailsForm(forms.ModelForm):
                 }
             ),
             "incident_year": forms.NumberInput(
+                attrs={"class": "form-control"}
+            ),
+            "incident_date_estimate": forms.TextInput(
                 attrs={"class": "form-control"}
             ),
             "description": forms.Textarea(
@@ -512,7 +520,8 @@ class IncidentDetailsForm(forms.ModelForm):
         )
 
         self.fields["location_types"].queryset = length_ordered(
-            option_queryset(ReportOption.Category.LOCATION_TYPE)
+            option_queryset(ReportOption.Category.LOCATION_TYPE),
+            first_slug="school",
         )
 
         self.fields["incident_types"].queryset = length_ordered(
@@ -534,6 +543,18 @@ class IncidentDetailsForm(forms.ModelForm):
                 self.report,
                 ReportOption.Category.INCIDENT_TYPE,
             )
+
+    def clean_zip_code(self):
+        import re as _re
+
+        zip_code = (self.cleaned_data.get("zip_code") or "").strip()
+
+        if zip_code and not _re.fullmatch(r"\d{5}", zip_code):
+            raise forms.ValidationError(
+                "Please enter a 5-digit zip code."
+            )
+
+        return zip_code
 
     def clean(self):
         cleaned_data = super().clean()
